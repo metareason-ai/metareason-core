@@ -61,6 +61,105 @@ metareason report --latest
 - Oracle Development - Creating custom evaluation criteria
 - API Reference - Python API documentation
 
+## 🛠️ Development Setup
+
+### Prerequisites
+
+- Python 3.9 or higher
+- Poetry (recommended) or pip
+
+### Environment Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/metareason-ai/metareason-core.git
+   cd metareason-core
+   ```
+
+2. **Create a virtual environment:**
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install Poetry (if not already installed):**
+   ```bash
+   pip install poetry
+   ```
+
+4. **Install dependencies:**
+   ```bash
+   poetry install
+   ```
+
+5. **Install pre-commit hooks:**
+   ```bash
+   pre-commit install
+   ```
+
+### Project Structure
+
+```
+metareason-core/
+├── src/metareason/
+│   ├── config/        # Configuration management
+│   ├── sampling/      # Sampling strategies
+│   ├── oracles/       # Oracle implementations
+│   ├── analysis/      # Analysis tools
+│   ├── adapters/      # LLM provider adapters
+│   ├── cli/           # Command-line interface
+│   └── utils/         # Utility functions
+├── tests/             # Test suite
+├── examples/          # Example usage
+├── docs/              # Documentation
+└── pyproject.toml     # Project configuration
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=metareason
+
+# Run specific test file
+pytest tests/test_version.py
+
+# Run tests in parallel
+pytest -n auto
+```
+
+### Code Quality
+
+The project uses several tools to maintain code quality:
+
+- **Black**: Code formatting
+- **isort**: Import sorting
+- **flake8**: Linting
+- **mypy**: Type checking
+- **bandit**: Security checks
+- **pre-commit**: Automated checks before commits
+
+Run all checks manually:
+```bash
+# Format code
+black src tests
+
+# Sort imports
+isort src tests
+
+# Run linting
+flake8 src tests
+
+# Type checking
+mypy src
+
+# Security checks
+bandit -r src
+```
+
 ## 🤝 Contributing
 
 We welcome contributions! MetaReason Core is built by the community, for the community.
