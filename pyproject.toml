@@ -7,7 +7,7 @@ name = "metareason"
 version = "0.1.0"
 description = "A meta-reasoning framework for LLM sampling and oracle evaluation"
 authors = [
-    {name = "Your Name", email = "you@example.com"},
+    {name = "Jeff Bradley", email = "admin@metareason.ai"},
 ]
 readme = "README.md"
 license = {text = "MIT"}
@@ -90,7 +90,7 @@ packages = ["src/metareason"]
 
 [tool.black]
 line-length = 88
-target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
+target-version = ['py39', 'py310', 'py311', 'py312']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
