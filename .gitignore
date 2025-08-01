@@ -212,7 +212,6 @@ reports/
 *.db
 config/local.yaml
 .secrets/
-poetry.lock
 
 # IDEs
 .idea/
