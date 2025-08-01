@@ -1,83 +1,96 @@
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry]
+[project]
 name = "metareason"
 version = "0.1.0"
 description = "A meta-reasoning framework for LLM sampling and oracle evaluation"
-authors = ["Your Name <you@example.com>"]
+authors = [
+    {name = "Your Name", email = "you@example.com"},
+]
 readme = "README.md"
-license = "MIT"
-homepage = "https://github.com/yourusername/metareason-core"
-repository = "https://github.com/yourusername/metareason-core"
-documentation = "https://metareason.readthedocs.io"
+license = {text = "MIT"}
+requires-python = ">=3.9"
 keywords = ["llm", "meta-reasoning", "sampling", "evaluation", "ai"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
-packages = [{include = "metareason", from = "src"}]
+dependencies = [
+    # Core dependencies with proper version pinning
+    "pymc>=5.0,<6.0",  # Bayesian analysis
+    "numpy>=1.24,<2.0",  # Numerical computing
+    "scipy>=1.11,<2.0",  # Scientific computing
+    "pydantic>=2.0,<3.0",  # Configuration validation
+    "pydantic-settings>=2.0,<3.0",  # Settings management
+    "click>=8.1,<9.0",  # CLI framework
+    "pyyaml>=6.0,<7.0",  # Configuration parsing
+    "jinja2>=3.1,<4.0",  # Template rendering
+    "httpx>=0.25,<1.0",  # Async HTTP client
+    "matplotlib>=3.8,<4.0",  # Visualization
+    "seaborn>=0.13,<1.0",  # Statistical visualization
+    # Additional useful dependencies
+    "rich>=13.0,<14.0",  # Rich terminal output
+    "pandas>=2.0,<3.0",  # Data manipulation
+    "tqdm>=4.66,<5.0",  # Progress bars
+    "aiohttp>=3.9,<4.0",  # Async HTTP server/client
+    "tenacity>=8.2,<9.0",  # Retry logic
+    "structlog>=24.0,<25.0",  # Structured logging
+    "python-dotenv>=1.0,<2.0",  # Environment variable management
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-# Core dependencies with proper version pinning
-pymc = "^5.0"  # Bayesian analysis
-numpy = "^1.24"  # Numerical computing
-scipy = "^1.11"  # Scientific computing
-pydantic = "^2.0"  # Configuration validation
-pydantic-settings = "^2.0"  # Settings management
-click = "^8.1"  # CLI framework
-pyyaml = "^6.0"  # Configuration parsing
-jinja2 = "^3.1"  # Template rendering
-httpx = "^0.25"  # Async HTTP client
-matplotlib = "^3.8"  # Visualization
-seaborn = "^0.13"  # Statistical visualization
-# Additional useful dependencies
-rich = "^13.0"  # Rich terminal output
-pandas = "^2.0"  # Data manipulation
-tqdm = "^4.66"  # Progress bars
-aiohttp = "^3.9"  # Async HTTP server/client
-tenacity = "^8.2"  # Retry logic
-structlog = "^24.0"  # Structured logging
-python-dotenv = "^1.0"  # Environment variable management
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4,<8.0",
+    "pytest-asyncio>=0.21,<1.0",
+    "pytest-cov>=4.1,<5.0",
+    "pytest-mock>=3.12,<4.0",
+    "pytest-xdist>=3.5,<4.0",
+    "mypy>=1.8,<2.0",
+    "black>=24.0,<25.0",
+    "isort>=5.13,<6.0",
+    "flake8>=7.0,<8.0",
+    "flake8-docstrings>=1.7,<2.0",
+    "flake8-bugbear>=24.0,<25.0",
+    "bandit>=1.7,<2.0",
+    "pre-commit>=3.6,<4.0",
+    "ipython>=8.18,<9.0",
+    "jupyter>=1.0,<2.0",
+    "notebook>=7.0,<8.0",
+]
+docs = [
+    "sphinx>=7.2,<8.0",
+    "sphinx-rtd-theme>=2.0,<3.0",
+    "sphinx-autodoc-typehints>=1.25,<2.0",
+    "myst-parser>=2.0,<3.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^7.4"
-pytest-asyncio = "^0.21"
-pytest-cov = "^4.1"
-pytest-mock = "^3.12"
-pytest-xdist = "^3.5"
-mypy = "^1.8"
-black = "^24.0"
-isort = "^5.13"
-flake8 = "^7.0"
-flake8-docstrings = "^1.7"
-flake8-bugbear = "^24.0"
-bandit = "^1.7"
-pre-commit = "^3.6"
-ipython = "^8.18"
-jupyter = "^1.0"
-notebook = "^7.0"
-
-[tool.poetry.group.docs.dependencies]
-sphinx = "^7.2"
-sphinx-rtd-theme = "^2.0"
-sphinx-autodoc-typehints = "^1.25"
-myst-parser = "^2.0"
-
-[tool.poetry.scripts]
+[project.scripts]
 metareason = "metareason.cli.main:cli"
+
+[project.urls]
+Homepage = "https://github.com/yourusername/metareason-core"
+Repository = "https://github.com/yourusername/metareason-core"
+Documentation = "https://metareason.readthedocs.io"
+
+[tool.hatch.version]
+path = "src/metareason/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/metareason"]
 
 [tool.black]
 line-length = 88
-target-version = ['py39', 'py310', 'py311', 'py312']
+target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
