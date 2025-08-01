@@ -103,9 +103,7 @@ class ContinuousAxis(AxisConfig):
     """Configuration for continuous axes using probability distributions."""
 
     type: Literal["truncated_normal", "beta", "uniform", "custom"]
-    mu: Optional[float] = Field(
-        None, description="Mean (for truncated_normal)"
-    )
+    mu: Optional[float] = Field(None, description="Mean (for truncated_normal)")
     sigma: Optional[float] = Field(
         None, gt=0, description="Standard deviation (for truncated_normal)"
     )
@@ -115,21 +113,11 @@ class ContinuousAxis(AxisConfig):
     max: Optional[float] = Field(
         None, description="Maximum value (for truncated_normal, uniform)"
     )
-    alpha: Optional[float] = Field(
-        None, gt=0, description="Alpha parameter (for beta)"
-    )
-    beta: Optional[float] = Field(
-        None, gt=0, description="Beta parameter (for beta)"
-    )
-    module: Optional[str] = Field(
-        None, description="Module path (for custom)"
-    )
-    class_name: Optional[str] = Field(
-        None, description="Class name (for custom)"
-    )
-    config: Optional[dict] = Field(
-        None, description="Custom config (for custom)"
-    )
+    alpha: Optional[float] = Field(None, gt=0, description="Alpha parameter (for beta)")
+    beta: Optional[float] = Field(None, gt=0, description="Beta parameter (for beta)")
+    module: Optional[str] = Field(None, description="Module path (for custom)")
+    class_name: Optional[str] = Field(None, description="Class name (for custom)")
+    config: Optional[dict] = Field(None, description="Custom config (for custom)")
 
     @model_validator(mode="after")
     def validate_distribution_parameters(self) -> "ContinuousAxis":
@@ -160,8 +148,7 @@ class ContinuousAxis(AxisConfig):
                     f"like sigma: 0.1"
                 )
 
-            if (self.min is not None and self.max is not None 
-                    and self.min >= self.max):
+            if self.min is not None and self.max is not None and self.min >= self.max:
                 raise ValueError(
                     f"Minimum ({self.min}) must be less than maximum "
                     f"({self.max}). Suggestion: Ensure min < max for "
@@ -209,8 +196,7 @@ class ContinuousAxis(AxisConfig):
                     f"min: 0.0, max: 1.0"
                 )
 
-            if (self.min is not None and self.max is not None 
-                    and self.min >= self.max):
+            if self.min is not None and self.max is not None and self.min >= self.max:
                 raise ValueError(
                     f"Minimum ({self.min}) must be less than maximum "
                     f"({self.max}). Suggestion: Ensure min < max for "

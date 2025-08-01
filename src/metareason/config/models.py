@@ -20,13 +20,13 @@ class DomainContext(BaseModel):
     regulatory_frameworks: Optional[List[str]] = Field(
         None, description="Applicable regulatory frameworks"
     )
-    risk_category: Optional[
-        Literal["minimal", "limited", "high", "unacceptable"]
-    ] = Field(None, description="Risk category per EU AI Act")
+    risk_category: Optional[Literal["minimal", "limited", "high", "unacceptable"]] = (
+        Field(None, description="Risk category per EU AI Act")
+    )
     use_case: Optional[str] = Field(None, description="Specific use case description")
-    data_sensitivity: Optional[
-        Literal["public", "internal", "confidential", "pii"]
-    ] = Field(None, description="Data sensitivity level")
+    data_sensitivity: Optional[Literal["public", "internal", "confidential", "pii"]] = (
+        Field(None, description="Data sensitivity level")
+    )
 
 
 class Metadata(BaseModel):
@@ -36,9 +36,9 @@ class Metadata(BaseModel):
     created_by: Optional[str] = Field(None, description="Creator email or identifier")
     created_date: Optional[date] = Field(None, description="Creation date")
     last_modified: Optional[date] = Field(None, description="Last modification date")
-    review_cycle: Optional[
-        Literal["monthly", "quarterly", "annual"]
-    ] = Field(None, description="Review cycle frequency")
+    review_cycle: Optional[Literal["monthly", "quarterly", "annual"]] = Field(
+        None, description="Review cycle frequency"
+    )
     compliance_mappings: Optional[List[str]] = Field(
         None, description="Compliance framework mappings"
     )
@@ -74,9 +74,7 @@ class Metadata(BaseModel):
 class EvaluationConfig(BaseModel):
     """Main configuration model for MetaReason evaluations."""
 
-    prompt_id: str = Field(
-        ..., description="Unique identifier for the prompt family"
-    )
+    prompt_id: str = Field(..., description="Unique identifier for the prompt family")
     prompt_template: str = Field(..., description="Jinja2-compatible template")
     axes: Dict[str, AxisConfigType] = Field(
         ..., description="Variable axes configuration", alias="schema"
@@ -256,8 +254,7 @@ class EvaluationConfig(BaseModel):
         # Rule of thumb: need at least 10 samples per categorical combination
         min_variants_needed = categorical_combinations * 10
 
-        if (self.n_variants < min_variants_needed 
-                and categorical_combinations > 1):
+        if self.n_variants < min_variants_needed and categorical_combinations > 1:
             raise ValueError(
                 f"With {categorical_combinations} categorical "
                 f"combinations, recommend at least {min_variants_needed} "

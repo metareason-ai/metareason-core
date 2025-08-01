@@ -47,6 +47,7 @@ repos:
           - types-requests
           - types-pyyaml
           - types-python-dateutil
+          - pydantic>=2.0
         args:
           - --ignore-missing-imports
           - --install-types

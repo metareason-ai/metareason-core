@@ -26,9 +26,7 @@ class TruncatedNormalConfig(DistributionConfig):
 
     type: Literal["truncated_normal"] = "truncated_normal"
     mu: float = Field(..., description="Mean of the distribution")
-    sigma: float = Field(
-        ..., gt=0, description="Standard deviation (must be positive)"
-    )
+    sigma: float = Field(..., gt=0, description="Standard deviation (must be positive)")
     min: float = Field(..., description="Minimum value (truncation bound)")
     max: float = Field(..., description="Maximum value (truncation bound)")
 
@@ -59,16 +57,12 @@ class BetaDistributionConfig(DistributionConfig):
     """Configuration for beta distribution."""
 
     type: Literal["beta"] = "beta"
-    alpha: float = Field(
-        ..., gt=0, description="Alpha parameter (must be positive)"
-    )
-    beta: float = Field(
-        ..., gt=0, description="Beta parameter (must be positive)"
-    )
+    alpha: float = Field(..., gt=0, description="Alpha parameter (must be positive)")
+    beta: float = Field(..., gt=0, description="Beta parameter (must be positive)")
 
     @field_validator("alpha", "beta")
     @classmethod
-    def validate_positive_parameters(cls, v: float, info) -> float:
+    def validate_positive_parameters(cls, v: float, info: Any) -> float:
         if v <= 0:
             param_name = info.field_name
             raise ValueError(

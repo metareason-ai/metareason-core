@@ -1,6 +1,6 @@
 """Sampling configuration models for MetaReason."""
 
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -10,12 +10,9 @@ class SamplingConfig(BaseModel):
 
     method: Literal["latin_hypercube", "random", "sobol"] = Field(
         default="latin_hypercube",
-        description="Sampling method to use for generating parameter "
-        "combinations",
+        description="Sampling method to use for generating parameter " "combinations",
     )
-    optimization_criterion: Optional[
-        Literal["maximin", "correlation", "esi"]
-    ] = Field(
+    optimization_criterion: Optional[Literal["maximin", "correlation", "esi"]] = Field(
         default="maximin",
         description="Optimization criterion for Latin Hypercube Sampling",
     )
@@ -24,8 +21,7 @@ class SamplingConfig(BaseModel):
     )
     stratified_by: Optional[List[str]] = Field(
         default=None,
-        description="List of categorical axis names to ensure balanced "
-        "sampling",
+        description="List of categorical axis names to ensure balanced " "sampling",
     )
 
     @field_validator("random_seed")
@@ -41,9 +37,7 @@ class SamplingConfig(BaseModel):
 
     @field_validator("stratified_by")
     @classmethod
-    def validate_stratified_by(
-        cls, v: Optional[List[str]]
-    ) -> Optional[List[str]]:
+    def validate_stratified_by(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         if v is not None:
             if not v:
                 raise ValueError(
@@ -66,7 +60,7 @@ class SamplingConfig(BaseModel):
     @field_validator("optimization_criterion")
     @classmethod
     def validate_optimization_criterion_compatibility(
-        cls, v: Optional[str], info
+        cls, v: Optional[str], info: Any
     ) -> Optional[str]:
         # Note: We can't access other fields in field_validator in Pydantic v2
         # This will be handled in model_validator if needed

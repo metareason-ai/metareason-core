@@ -30,7 +30,7 @@ dependencies = [
     "pymc>=5.0,<6.0",  # Bayesian analysis
     "numpy>=1.24,<2.0",  # Numerical computing
     "scipy>=1.11,<2.0",  # Scientific computing
-    "pydantic>=2.0,<3.0",  # Configuration validation
+    "pydantic[mypy]>=2.0,<3.0",  # Configuration validation
     "pydantic-settings>=2.0,<3.0",  # Settings management
     "click>=8.1,<9.0",  # CLI framework
     "pyyaml>=6.0,<7.0",  # Configuration parsing
@@ -118,6 +118,7 @@ src_paths = ["src", "tests"]
 
 [tool.mypy]
 python_version = "3.9"
+plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

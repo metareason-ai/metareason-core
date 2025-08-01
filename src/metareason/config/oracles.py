@@ -10,9 +10,7 @@ class EmbeddingSimilarityOracle(BaseModel):
 
     type: Literal["embedding_similarity"] = "embedding_similarity"
     canonical_answer: str = Field(..., description="The expected correct answer")
-    method: Literal[
-        "cosine_similarity", "semantic_entropy", "euclidean"
-    ] = Field(
+    method: Literal["cosine_similarity", "semantic_entropy", "euclidean"] = Field(
         default="cosine_similarity", description="Similarity calculation method"
     )
     threshold: float = Field(
@@ -106,9 +104,9 @@ class StatisticalCalibrationOracle(BaseModel):
         le=0.5,
         description="Tolerance for confidence deviation",
     )
-    calibration_method: Literal[
-        "platt_scaling", "isotonic_regression"
-    ] = Field(default="platt_scaling", description="Calibration method to use")
+    calibration_method: Literal["platt_scaling", "isotonic_regression"] = Field(
+        default="platt_scaling", description="Calibration method to use"
+    )
 
     @field_validator("expected_confidence")
     @classmethod
@@ -142,9 +140,7 @@ class CustomOracle(BaseModel):
     """Configuration for custom oracle implementations."""
 
     type: Literal["custom"] = "custom"
-    module: str = Field(
-        ..., description="Python module containing the oracle class"
-    )
+    module: str = Field(..., description="Python module containing the oracle class")
     class_name: str = Field(..., description="Name of the oracle class")
     config: Dict[str, Any] = Field(
         default_factory=dict, description="Custom configuration parameters"
