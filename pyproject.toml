@@ -7,7 +7,7 @@ name = "metareason"
 version = "0.1.0"
 description = "A meta-reasoning framework for LLM sampling and oracle evaluation"
 authors = [
-    {name = "Your Name", email = "you@example.com"},
+    {name = "Jeff Bradley", email = "admin@metareason.ai"},
 ]
 readme = "README.md"
 license = {text = "MIT"}
@@ -30,7 +30,7 @@ dependencies = [
     "pymc>=5.0,<6.0",  # Bayesian analysis
     "numpy>=1.24,<2.0",  # Numerical computing
     "scipy>=1.11,<2.0",  # Scientific computing
-    "pydantic>=2.0,<3.0",  # Configuration validation
+    "pydantic[mypy]>=2.0,<3.0",  # Configuration validation
     "pydantic-settings>=2.0,<3.0",  # Settings management
     "click>=8.1,<9.0",  # CLI framework
     "pyyaml>=6.0,<7.0",  # Configuration parsing
@@ -90,7 +90,7 @@ packages = ["src/metareason"]
 
 [tool.black]
 line-length = 88
-target-version = ['py39', 'py310', 'py311', 'py312', 'py313']
+target-version = ['py39', 'py310', 'py311', 'py312']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -118,6 +118,7 @@ src_paths = ["src", "tests"]
 
 [tool.mypy]
 python_version = "3.9"
+plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

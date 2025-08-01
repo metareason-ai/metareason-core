@@ -19,15 +19,9 @@ source venv/bin/activate
 echo "Upgrading pip..."
 pip install --upgrade pip setuptools wheel
 
-# Install Poetry if not already installed
-if ! command -v poetry &> /dev/null; then
-    echo "Installing Poetry..."
-    pip install poetry
-fi
-
 # Install dependencies
 echo "Installing dependencies..."
-poetry install
+pip install -e ".[dev,docs]"
 
 # Install pre-commit hooks
 echo "Installing pre-commit hooks..."
