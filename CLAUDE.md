@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Important Development Guidelines
+
+**Always activate the virtual environment before executing any Python commands or scripts. Use `source venv/bin/activate` before running pytest, pip, python, or any Python-related tools.**
+
 ## Common Development Commands
 
 ### Environment Setup
