@@ -78,8 +78,8 @@ docs = [
 metareason = "metareason.cli.main:cli"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/metareason-core"
-Repository = "https://github.com/yourusername/metareason-core"
+Homepage = "https://github.com/jeffgbradley2/metareason-ai"
+Repository = "https://github.com/jeffgbradley2/metareason-ai/metareason-core"
 Documentation = "https://metareason.readthedocs.io"
 
 [tool.hatch.version]
