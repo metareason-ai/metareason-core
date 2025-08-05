@@ -1,0 +1,72 @@
+# Advanced evaluation configuration demonstrating includes and inheritance
+inherits: base_config.yaml
+
+prompt_id: ${PROMPT_ID:advanced_qa_evaluation}
+prompt_template: |
+  Context: ${CONTEXT:You are an AI assistant helping with technical questions.}
+
+  Question Type: {{question_type}}
+  Difficulty: {{difficulty}}
+  Domain: {{domain}}
+
+  Question: {{question}}
+
+  Please provide a {{response_style}} response.
+
+axes:
+  question_type:
+    type: categorical
+    values: ["factual", "analytical", "creative", "problem-solving"]
+    weights: [0.3, 0.3, 0.2, 0.2]
+
+  difficulty:
+    type: categorical
+    values: ["beginner", "intermediate", "advanced"]
+    weights: [0.4, 0.4, 0.2]
+
+  domain:
+    type: categorical
+    values: ["technology", "science", "business", "general"]
+
+  response_style:
+    type: categorical
+    values: ["concise", "detailed", "step-by-step"]
+
+  question:
+    type: categorical
+    values: [
+      "What is machine learning?",
+      "How do neural networks work?",
+      "Explain the difference between AI and ML",
+      "What are the ethical implications of AI?",
+      "How can businesses implement AI solutions?"
+    ]
+
+# Include shared oracle configurations
+oracles: !include shared_oracles.yaml
+
+# Override some sampling settings
+sampling:
+  method: latin_hypercube
+  optimization_criterion: maximin
+  random_seed: ${RANDOM_SEED:42}
+  stratified_by: ["question_type", "difficulty"]
+
+n_variants: ${N_VARIANTS:2000}
+
+domain_context:
+  industry: technology
+  use_case: advanced_qa_evaluation
+  data_sensitivity: internal
+  compliance_requirements: ["gdpr", "ccpa"]
+
+# Override metadata
+metadata:
+  version: 2.0.0
+  description: |
+    Advanced Q&A evaluation configuration with multiple question types,
+    difficulty levels, and comprehensive oracle assessment.
+  tags: ["advanced", "qa", "multi-domain", "evaluation"]
+  parameters:
+    total_combinations: "4 * 3 * 4 * 3 * 5 = 720"
+    recommended_variants: "7200+ for statistical significance"

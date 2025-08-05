@@ -1,0 +1,79 @@
+# Configuration demonstrating environment variable substitution
+
+prompt_id: ${EVALUATION_NAME:environment_demo}
+prompt_template: |
+  System: ${SYSTEM_PROMPT:You are a helpful AI assistant.}
+
+  Task: {{task_type}}
+  Complexity: {{complexity}}
+
+  ${TASK_DESCRIPTION:Please complete the requested task.}
+
+axes:
+  task_type:
+    type: categorical
+    values: ["${TASK1:summarization}", "${TASK2:analysis}", "${TASK3:generation}"]
+
+  complexity:
+    type: categorical
+    values: ["simple", "moderate", "complex"]
+    weights: [${WEIGHT_SIMPLE:0.5}, ${WEIGHT_MODERATE:0.3}, ${WEIGHT_COMPLEX:0.2}]
+
+sampling:
+  method: ${SAMPLING_METHOD:latin_hypercube}
+  random_seed: ${RANDOM_SEED:42}
+
+n_variants: ${N_VARIANTS:1000}
+
+oracles:
+  accuracy:
+    type: embedding_similarity
+    canonical_answer: |
+      ${CANONICAL_ANSWER:A high-quality response should address the task completely and accurately.}
+    threshold: ${ACCURACY_THRESHOLD:0.8}
+    embedding_model: ${EMBEDDING_MODEL:text-embedding-3-small}
+
+  explainability:
+    type: llm_judge
+    rubric: |
+      Evaluate the response based on:
+      1. Task completion: ${TASK_COMPLETION_WEIGHT:40}%
+      2. Clarity: ${CLARITY_WEIGHT:30}%
+      3. Accuracy: ${ACCURACY_WEIGHT:30}%
+
+      ${ADDITIONAL_CRITERIA:Additional criteria may apply based on task type.}
+    judge_model: ${JUDGE_MODEL:gpt-4}
+    temperature: ${JUDGE_TEMPERATURE:0.0}
+
+domain_context:
+  industry: ${INDUSTRY:research}
+  use_case: ${USE_CASE:environment_variable_testing}
+  data_sensitivity: ${DATA_SENSITIVITY:public}
+  environment: ${DEPLOYMENT_ENV:development}
+
+metadata:
+  version: ${CONFIG_VERSION:1.0.0}
+  created_by: ${USER}@${COMPANY:example.com}
+  created_date: ${BUILD_DATE:2024-01-01}
+  build_info:
+    commit: ${GIT_COMMIT:unknown}
+    branch: ${GIT_BRANCH:main}
+    build_number: ${BUILD_NUMBER:0}
+
+  deployment:
+    region: ${AWS_REGION:us-east-1}
+    environment: ${DEPLOYMENT_ENV:dev}
+    api_version: ${API_VERSION:v1}
+
+statistical_config:
+  model: beta_binomial
+  prior:
+    alpha: ${BETA_ALPHA:1.0}
+    beta: ${BETA_BETA:1.0}
+  inference:
+    method: mcmc
+    samples: ${MCMC_SAMPLES:2000}
+    warmup: ${MCMC_WARMUP:1000}
+    chains: ${MCMC_CHAINS:2}
+  output:
+    credible_interval: ${CREDIBLE_INTERVAL:0.95}
