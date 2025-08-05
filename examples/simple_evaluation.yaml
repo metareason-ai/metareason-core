@@ -8,15 +8,15 @@ schema:
     type: categorical
     values: ["Explain", "Describe", "Analyze"]
     weights: [0.4, 0.4, 0.2]
-  
+
   topic:
-    type: categorical  
+    type: categorical
     values: ["machine learning", "neural networks", "deep learning"]
-  
+
   style:
     type: categorical
     values: ["technical", "simple", "academic"]
-  
+
   temperature:
     type: truncated_normal
     mu: 0.7

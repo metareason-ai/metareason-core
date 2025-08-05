@@ -4,13 +4,13 @@ inherits: base_config.yaml
 prompt_id: ${PROMPT_ID:advanced_qa_evaluation}
 prompt_template: |
   Context: ${CONTEXT:You are an AI assistant helping with technical questions.}
-  
+
   Question Type: {{question_type}}
   Difficulty: {{difficulty}}
   Domain: {{domain}}
-  
+
   Question: {{question}}
-  
+
   Please provide a {{response_style}} response.
 
 axes:
@@ -18,20 +18,20 @@ axes:
     type: categorical
     values: ["factual", "analytical", "creative", "problem-solving"]
     weights: [0.3, 0.3, 0.2, 0.2]
-  
+
   difficulty:
     type: categorical
     values: ["beginner", "intermediate", "advanced"]
     weights: [0.4, 0.4, 0.2]
-  
+
   domain:
     type: categorical
     values: ["technology", "science", "business", "general"]
-  
+
   response_style:
     type: categorical
     values: ["concise", "detailed", "step-by-step"]
-  
+
   question:
     type: categorical
     values: [

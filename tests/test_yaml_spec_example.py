@@ -119,57 +119,57 @@ metadata:
   tags: ["production", "high-risk", "credit-decisioning"]
   deprecation_date: "2025-07-09"
 """
-    
+
     # Parse and validate the configuration
     config = validate_yaml_string(yaml_content)
-    
+
     # Test main fields
     assert config.prompt_id == "iso_42001_compliance_check"
     assert config.n_variants == 2000
-    
+
     # Test axes
     assert len(config.axes) == 7
     assert config.axes["verb"].type == "categorical"
     assert config.axes["verb"].values == ["analyze", "evaluate", "assess", "review"]
     assert config.axes["verb"].weights == [0.3, 0.3, 0.2, 0.2]
-    
+
     assert config.axes["temperature"].type == "truncated_normal"
     assert config.axes["temperature"].mu == 0.7
     assert config.axes["temperature"].sigma == 0.15
-    
+
     assert config.axes["top_p"].type == "beta"
     assert config.axes["top_p"].alpha == 9.0
     assert config.axes["top_p"].beta == 1.0
-    
+
     # Test sampling
     assert config.sampling.method == "latin_hypercube"
     assert config.sampling.optimization_criterion == "maximin"
     assert config.sampling.random_seed == 42
     assert config.sampling.stratified_by == ["domain", "focus_area"]
-    
+
     # Test oracles
     assert config.oracles.accuracy is not None
     assert config.oracles.accuracy.type == "embedding_similarity"
     assert config.oracles.accuracy.threshold == 0.88
     assert config.oracles.accuracy.method == "cosine_similarity"
-    
+
     assert config.oracles.explainability is not None
     assert config.oracles.explainability.type == "llm_judge"
     assert config.oracles.explainability.temperature == 0.0
-    
+
     # Test custom oracle
     assert config.oracles.custom_oracles is not None
     assert "regulatory_alignment" in config.oracles.custom_oracles
     custom_oracle = config.oracles.custom_oracles["regulatory_alignment"]
     assert custom_oracle.module == "metareason.oracles.compliance"
     assert custom_oracle.class_name == "ISOComplianceOracle"
-    
+
     # Test domain context
     assert config.domain_context is not None
     assert config.domain_context.industry == "financial_services"
     assert config.domain_context.risk_category == "high"
     assert config.domain_context.data_sensitivity == "pii"
-    
+
     # Test metadata
     assert config.metadata is not None
     assert config.metadata.version == "1.0.0"
@@ -207,22 +207,22 @@ statistical_config:
     credible_interval: 0.95
     hdi_method: "shortest"  # Options: shortest, central
 """
-    
+
     config = validate_yaml_string(yaml_content)
-    
+
     assert config.statistical_config is not None
     assert config.statistical_config.model == "beta_binomial"
-    
+
     # Test prior
     assert config.statistical_config.prior.alpha == 1.0
     assert config.statistical_config.prior.beta == 1.0
-    
+
     # Test inference
     assert config.statistical_config.inference.method == "mcmc"
     assert config.statistical_config.inference.samples == 4000
     assert config.statistical_config.inference.chains == 4
     assert config.statistical_config.inference.target_accept == 0.8
-    
+
     # Test output
     assert config.statistical_config.output.credible_interval == 0.95
     assert config.statistical_config.output.hdi_method == "shortest"

@@ -268,7 +268,9 @@ class TestTemplateVariableValidation:
             EvaluationConfig(**config_data)
 
         error_msg = str(exc_info.value)
-        assert "not defined in schema" in error_msg or "not defined in axes" in error_msg
+        assert (
+            "not defined in schema" in error_msg or "not defined in axes" in error_msg
+        )
         assert "age" in error_msg
 
     def test_unused_schema_variables_allowed(self) -> None:

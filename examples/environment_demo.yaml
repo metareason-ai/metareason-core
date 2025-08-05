@@ -3,17 +3,17 @@
 prompt_id: ${EVALUATION_NAME:environment_demo}
 prompt_template: |
   System: ${SYSTEM_PROMPT:You are a helpful AI assistant.}
-  
+
   Task: {{task_type}}
   Complexity: {{complexity}}
-  
+
   ${TASK_DESCRIPTION:Please complete the requested task.}
 
 axes:
   task_type:
     type: categorical
     values: ["${TASK1:summarization}", "${TASK2:analysis}", "${TASK3:generation}"]
-  
+
   complexity:
     type: categorical
     values: ["simple", "moderate", "complex"]
@@ -32,7 +32,7 @@ oracles:
       ${CANONICAL_ANSWER:A high-quality response should address the task completely and accurately.}
     threshold: ${ACCURACY_THRESHOLD:0.8}
     embedding_model: ${EMBEDDING_MODEL:text-embedding-3-small}
-  
+
   explainability:
     type: llm_judge
     rubric: |
@@ -40,7 +40,7 @@ oracles:
       1. Task completion: ${TASK_COMPLETION_WEIGHT:40}%
       2. Clarity: ${CLARITY_WEIGHT:30}%
       3. Accuracy: ${ACCURACY_WEIGHT:30}%
-      
+
       ${ADDITIONAL_CRITERIA:Additional criteria may apply based on task type.}
     judge_model: ${JUDGE_MODEL:gpt-4}
     temperature: ${JUDGE_TEMPERATURE:0.0}
@@ -59,7 +59,7 @@ metadata:
     commit: ${GIT_COMMIT:unknown}
     branch: ${GIT_BRANCH:main}
     build_number: ${BUILD_NUMBER:0}
-  
+
   deployment:
     region: ${AWS_REGION:us-east-1}
     environment: ${DEPLOYMENT_ENV:dev}

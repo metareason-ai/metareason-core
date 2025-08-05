@@ -37,12 +37,12 @@ oracles:
     canonical_answer: "This is the expected answer"
     threshold: 0.85
 """
-    
+
     yaml_file = tmp_path / "test_config.yaml"
     yaml_file.write_text(yaml_content)
-    
+
     config = load_yaml_config(yaml_file)
-    
+
     assert config.prompt_id == "test_evaluation"
     assert config.n_variants == 1000
     assert "topic" in config.axes
@@ -75,12 +75,12 @@ statistical_config:
     samples: 4000
     chains: 4
 """
-    
+
     yaml_file = tmp_path / "test_stats.yaml"
     yaml_file.write_text(yaml_content)
-    
+
     config = load_yaml_config(yaml_file)
-    
+
     assert config.statistical_config is not None
     assert config.statistical_config.model == "beta_binomial"
     assert config.statistical_config.prior.alpha == 2.0
@@ -104,9 +104,9 @@ oracles:
       2. Concise
       3. Correct
 """
-    
+
     config = validate_yaml_string(yaml_content)
-    
+
     assert config.prompt_id == "string_test"
     assert config.oracles.explainability.rubric.strip().startswith("1. Clear")
 
@@ -141,14 +141,14 @@ oracles:
     type: embedding_similarity
     canonical_answer: "Result with sufficient detail for evaluation"
     threshold: 0.9
-"""
+""",
     }
-    
+
     for filename, content in configs_data.items():
         (tmp_path / filename).write_text(content)
-    
+
     configs = load_yaml_configs(tmp_path)
-    
+
     assert len(configs) == 2
     assert "config1" in configs
     assert "config2" in configs
@@ -175,12 +175,12 @@ oracles:
     canonical_answer: "Expected answer"
     threshold: 0.85
 """
-    
+
     yaml_file = tmp_path / "test_validation.yaml"
     yaml_file.write_text(yaml_content)
-    
+
     config, report = validate_yaml_file(yaml_file)
-    
+
     assert config is not None
     assert report.is_valid
     assert len(report.warnings) > 0  # Should warn about unused axis
@@ -195,12 +195,12 @@ prompt_template: "Test"
 schema:
   - invalid list instead of dict
 """
-    
+
     yaml_file = tmp_path / "invalid.yaml"
     yaml_file.write_text(yaml_content)
-    
+
     config, report = validate_yaml_file(yaml_file)
-    
+
     assert config is None
     assert not report.is_valid
     assert len(report.errors) > 0
@@ -216,10 +216,10 @@ schema:
     values: ["a", "b"]
 """
     # Missing prompt_id and oracles
-    
+
     yaml_file = tmp_path / "missing_fields.yaml"
     yaml_file.write_text(yaml_content)
-    
+
     with pytest.raises(Exception):  # Should raise validation error
         load_yaml_config(yaml_file)
 
@@ -254,12 +254,12 @@ oracles:
     canonical_answer: "This is a test canonical answer for validation"
     threshold: 0.8
 """
-    
+
     yaml_file = tmp_path / "all_dist.yaml"
     yaml_file.write_text(yaml_content)
-    
+
     config = load_yaml_config(yaml_file)
-    
+
     assert len(config.axes) == 4
     assert config.axes["cat"].type == "categorical"
     assert config.axes["truncnorm"].type == "truncated_normal"
@@ -277,6 +277,6 @@ def test_invalid_file_extension(tmp_path):
     """Test handling of invalid file extension."""
     txt_file = tmp_path / "config.txt"
     txt_file.write_text("not yaml")
-    
+
     with pytest.raises(ValueError, match="Invalid file extension"):
         load_yaml_config(txt_file)
