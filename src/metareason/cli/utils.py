@@ -6,8 +6,7 @@ from typing import Any, Dict, List, Optional, Set
 from rich.markup import escape
 from rich.table import Table
 
-from ..config.models import EvaluationConfig
-from ..config.validator import ValidationReport
+from ..config import EvaluationConfig, ValidationReport
 
 
 def find_config_files(directory: Path, recursive: bool = True) -> List[Path]:

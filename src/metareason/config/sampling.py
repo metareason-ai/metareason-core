@@ -12,7 +12,9 @@ class SamplingConfig(BaseModel):
         default="latin_hypercube",
         description="Sampling method to use for generating parameter " "combinations",
     )
-    optimization_criterion: Optional[Literal["maximin", "correlation", "esi"]] = Field(
+    optimization_criterion: Optional[
+        Literal["maximin", "correlation", "esi", "lloyd"]
+    ] = Field(
         default="maximin",
         description="Optimization criterion for Latin Hypercube Sampling",
     )
@@ -22,6 +24,37 @@ class SamplingConfig(BaseModel):
     stratified_by: Optional[List[str]] = Field(
         default=None,
         description="List of categorical axis names to ensure balanced " "sampling",
+    )
+    lhs_strength: int = Field(
+        default=1,
+        ge=1,
+        le=2,
+        description="Strength of Latin Hypercube Sampling (1 or 2)",
+    )
+    lhs_scramble: bool = Field(
+        default=True,
+        description="Whether to randomly place samples within LHS cells",
+    )
+    batch_size: int = Field(
+        default=10000,
+        ge=100,
+        description="Maximum samples per batch for memory efficiency",
+    )
+    show_progress: bool = Field(
+        default=True,
+        description="Whether to show progress bar for large sample generations",
+    )
+    parallel_generation: bool = Field(
+        default=False,
+        description="Whether to use parallel processing for sample generation",
+    )
+    n_workers: Optional[int] = Field(
+        default=None,
+        description="Number of parallel workers (None uses CPU count)",
+    )
+    compute_quality_metrics: bool = Field(
+        default=True,
+        description="Whether to compute quality metrics after sampling",
     )
 
     @field_validator("random_seed")
