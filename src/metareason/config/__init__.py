@@ -19,6 +19,18 @@ from .oracles import (
     StatisticalCalibrationOracle,
 )
 from .sampling import SamplingConfig
+from .statistical import (
+    InferenceConfig,
+    OutputConfig,
+    PriorConfig,
+    StatisticalConfig,
+)
+from .loader import load_yaml_config, load_yaml_configs, validate_yaml_string
+from .validator import (
+    ValidationReport,
+    validate_yaml_file,
+    validate_yaml_directory,
+)
 
 __all__ = [
     # Main configuration
@@ -46,4 +58,17 @@ __all__ = [
     "CustomOracle",
     # Sampling
     "SamplingConfig",
+    # Statistical
+    "StatisticalConfig",
+    "PriorConfig",
+    "InferenceConfig", 
+    "OutputConfig",
+    # Loaders
+    "load_yaml_config",
+    "load_yaml_configs",
+    "validate_yaml_string",
+    # Validators
+    "ValidationReport",
+    "validate_yaml_file",
+    "validate_yaml_directory",
 ]

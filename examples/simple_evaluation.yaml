@@ -1,0 +1,85 @@
+# Simple MetaReason evaluation configuration example
+prompt_id: simple_accuracy_test
+prompt_template: |
+  {{instruction}} the concept of {{topic}} in {{style}} terms.
+
+schema:
+  instruction:
+    type: categorical
+    values: ["Explain", "Describe", "Analyze"]
+    weights: [0.4, 0.4, 0.2]
+  
+  topic:
+    type: categorical  
+    values: ["machine learning", "neural networks", "deep learning"]
+  
+  style:
+    type: categorical
+    values: ["technical", "simple", "academic"]
+  
+  temperature:
+    type: truncated_normal
+    mu: 0.7
+    sigma: 0.1
+    min: 0.3
+    max: 0.9
+
+sampling:
+  method: latin_hypercube
+  optimization_criterion: maximin
+  random_seed: 42
+  stratified_by: ["instruction", "topic"]
+
+n_variants: 500
+
+oracles:
+  accuracy:
+    type: embedding_similarity
+    canonical_answer: |
+      A comprehensive explanation should cover the fundamental concepts,
+      key components, practical applications, and theoretical foundations
+      of the topic. It should be appropriate for the intended audience
+      style and provide clear, accurate information.
+    method: cosine_similarity
+    threshold: 0.85
+    embedding_model: text-embedding-3-small
+
+  explainability:
+    type: llm_judge
+    rubric: |
+      Rate the response as passing (1) if it meets these criteria:
+      1. Directly addresses the instruction (explain/describe/analyze)
+      2. Covers the specified topic accurately
+      3. Uses appropriate language for the style
+      4. Provides clear and structured information
+      5. Avoids unnecessary jargon when style is "simple"
+    judge_model: gpt-4
+    temperature: 0.0
+    output_format: binary
+
+domain_context:
+  industry: general
+  use_case: educational_content_generation
+  data_sensitivity: public
+
+metadata:
+  version: 1.0.0
+  created_by: demo@metareason.ai
+  created_date: 2024-12-10
+  review_cycle: quarterly
+  tags: ["demo", "education", "ml-concepts"]
+
+# Optional statistical configuration
+statistical_config:
+  model: beta_binomial
+  prior:
+    alpha: 1.0  # Uniform prior
+    beta: 1.0
+  inference:
+    method: mcmc
+    samples: 4000
+    chains: 4
+    target_accept: 0.8
+  output:
+    credible_interval: 0.95
+    hdi_method: shortest

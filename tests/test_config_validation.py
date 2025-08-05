@@ -31,7 +31,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, please respond to: {{question}}",
-            "schema": {
+            "axes": {
                 "name": {"type": "categorical", "values": ["Alice", "Bob", "Charlie"]},
                 "question": {
                     "type": "categorical",
@@ -58,7 +58,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "",
             "prompt_template": "Hello world",
-            "schema": {"var": {"type": "categorical", "values": ["a"]}},
+            "axes": {"var": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
                     "type": "embedding_similarity",
@@ -78,7 +78,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "Invalid-Format!",
             "prompt_template": "Hello world",
-            "schema": {"var": {"type": "categorical", "values": ["a"]}},
+            "axes": {"var": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
                     "type": "embedding_similarity",
@@ -100,7 +100,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "a" * 101,  # 101 characters
             "prompt_template": "Hello world",
-            "schema": {"var": {"type": "categorical", "values": ["a"]}},
+            "axes": {"var": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
                     "type": "embedding_similarity",
@@ -120,7 +120,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "",
-            "schema": {"var": {"type": "categorical", "values": ["a"]}},
+            "axes": {"var": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
                     "type": "embedding_similarity",
@@ -142,7 +142,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hi",
-            "schema": {"var": {"type": "categorical", "values": ["a"]}},
+            "axes": {"var": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
                     "type": "embedding_similarity",
@@ -162,7 +162,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello world, this is a longer template",
-            "schema": {},
+            "axes": {},
             "oracles": {
                 "accuracy": {
                     "type": "embedding_similarity",
@@ -176,7 +176,7 @@ class TestEvaluationConfig:
             EvaluationConfig(**config_data)
 
         error_msg = str(exc_info.value)
-        assert "Schema cannot be empty" in error_msg
+        assert "Schema cannot be empty" in error_msg or "axes" in error_msg.lower()
         assert "at least one axis" in error_msg
 
     def test_invalid_axis_name_fails(self) -> None:
@@ -184,7 +184,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{InvalidName}}, this is a longer template",
-            "schema": {"InvalidName": {"type": "categorical", "values": ["a"]}},
+            "axes": {"InvalidName": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
                     "type": "embedding_similarity",
@@ -206,7 +206,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, this is a longer template",
-            "schema": {"name": {"type": "categorical", "values": ["a"]}},
+            "axes": {"name": {"type": "categorical", "values": ["a"]}},
             "n_variants": 50,
             "oracles": {
                 "accuracy": {
@@ -228,7 +228,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, this is a longer template",
-            "schema": {"name": {"type": "categorical", "values": ["a"]}},
+            "axes": {"name": {"type": "categorical", "values": ["a"]}},
             "n_variants": 15000,
             "oracles": {
                 "accuracy": {
@@ -254,7 +254,7 @@ class TestTemplateVariableValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}} and {{age}}, this is a longer template",
-            "schema": {"name": {"type": "categorical", "values": ["Alice"]}},
+            "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
             "oracles": {
                 "accuracy": {
                     "type": "embedding_similarity",
@@ -268,15 +268,15 @@ class TestTemplateVariableValidation:
             EvaluationConfig(**config_data)
 
         error_msg = str(exc_info.value)
-        assert "not defined in schema" in error_msg
+        assert "not defined in schema" in error_msg or "not defined in axes" in error_msg
         assert "age" in error_msg
 
     def test_unused_schema_variables_allowed(self) -> None:
-        """Test that unused schema variables are allowed (just warnings)."""
+        """Test that unused axes variables are allowed (just warnings)."""
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, this is a longer template",
-            "schema": {
+            "axes": {
                 "name": {"type": "categorical", "values": ["Alice"]},
                 "unused_var": {"type": "categorical", "values": ["value"]},
             },
@@ -726,7 +726,7 @@ class TestCrossFieldValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{category}}, this is a longer template",
-            "schema": {"category": {"type": "categorical", "values": ["A", "B", "C"]}},
+            "axes": {"category": {"type": "categorical", "values": ["A", "B", "C"]}},
             "sampling": {"method": "latin_hypercube", "stratified_by": ["category"]},
             "oracles": {
                 "accuracy": {
@@ -745,7 +745,7 @@ class TestCrossFieldValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{category}}, this is a longer template",
-            "schema": {"category": {"type": "categorical", "values": ["A", "B", "C"]}},
+            "axes": {"category": {"type": "categorical", "values": ["A", "B", "C"]}},
             "sampling": {
                 "method": "latin_hypercube",
                 "stratified_by": ["nonexistent_axis"],
@@ -763,7 +763,7 @@ class TestCrossFieldValidation:
             EvaluationConfig(**config_data)
 
         error_msg = str(exc_info.value)
-        assert "not found in schema" in error_msg
+        assert "not found in schema" in error_msg or "not found in axes" in error_msg
 
     def test_stratified_sampling_continuous_axis_fails(self) -> None:
         """Test that stratified sampling with continuous axis fails."""
@@ -771,7 +771,7 @@ class TestCrossFieldValidation:
             "prompt_id": "test_prompt",
             "prompt_template": "Hello world, this is a longer template "
             "with {{temperature}}",
-            "schema": {"temperature": {"type": "uniform", "min": 0.0, "max": 1.0}},
+            "axes": {"temperature": {"type": "uniform", "min": 0.0, "max": 1.0}},
             "sampling": {"method": "latin_hypercube", "stratified_by": ["temperature"]},
             "oracles": {
                 "accuracy": {
@@ -793,7 +793,7 @@ class TestCrossFieldValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, this is a longer template",
-            "schema": {"name": {"type": "categorical", "values": ["Alice"]}},
+            "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
             "oracles": {},
         }
 
@@ -808,7 +808,7 @@ class TestCrossFieldValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{category}}, this is a longer template",
-            "schema": {
+            "axes": {
                 "category": {
                     "type": "categorical",
                     "values": ["A", "B"],
@@ -832,7 +832,7 @@ class TestCrossFieldValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{category}} {{type}}, this is a longer template",
-            "schema": {
+            "axes": {
                 "category": {"type": "categorical", "values": ["A", "B", "C"]},
                 "type": {
                     "type": "categorical",
@@ -909,7 +909,7 @@ class TestErrorMessageQuality:
         base_config = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, this is a longer template",
-            "schema": {"name": {"type": "categorical", "values": ["Alice"]}},
+            "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
             "oracles": {
                 "accuracy": {
                     "type": "embedding_similarity",
@@ -936,7 +936,7 @@ class TestErrorMessageQuality:
         config_data = {
             "prompt_id": "",  # Invalid
             "prompt_template": "Hello {{name}}, this is a longer template",
-            "schema": {"name": {"type": "categorical", "values": ["Alice"]}},
+            "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
             "oracles": {
                 "accuracy": {
                     "type": "embedding_similarity",
