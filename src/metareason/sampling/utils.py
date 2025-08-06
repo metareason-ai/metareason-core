@@ -1,7 +1,6 @@
 """Utilities for sampling operations."""
 
 import json
-import pickle
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -135,7 +134,7 @@ def save_samples(
         samples: Sample array
         metadata: Metadata dictionary
         file_path: Path to save file
-        format: File format ('npz', 'csv', 'pickle', 'json')
+        format: File format ('npz', 'csv', 'json')
     """
     file_path = Path(file_path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -152,10 +151,6 @@ def save_samples(
         meta_path = file_path.with_suffix(".meta.json")
         with open(meta_path, "w") as f:
             json.dump(metadata, f, indent=2, default=str)
-
-    elif format == "pickle":
-        with open(file_path, "wb") as f:
-            pickle.dump({"samples": samples, "metadata": metadata}, f)
 
     elif format == "json":
         data = {
@@ -188,8 +183,6 @@ def load_samples(
             format = "npz"
         elif file_path.suffix == ".csv":
             format = "csv"
-        elif file_path.suffix == ".pkl":
-            format = "pickle"
         elif file_path.suffix == ".json":
             format = "json"
         else:
@@ -210,12 +203,6 @@ def load_samples(
                 metadata = json.load(f)
         else:
             metadata = {}
-
-    elif format == "pickle":
-        with open(file_path, "rb") as f:
-            data = pickle.load(f)
-        samples = data["samples"]
-        metadata = data.get("metadata", {})
 
     elif format == "json":
         with open(file_path, "r") as f:
