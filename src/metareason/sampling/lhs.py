@@ -1,13 +1,12 @@
 """Latin Hypercube Sampling implementation for MetaReason."""
 
-import warnings
-from typing import Any, Dict, Literal, Optional
+from typing import Dict, Literal, Optional
 
 import numpy as np
 from scipy.stats import qmc
 from tqdm import tqdm
 
-from ..config.axes import AxisConfigType
+from ..config import AxisConfigType
 from .base import BaseSampler, SampleResult
 
 

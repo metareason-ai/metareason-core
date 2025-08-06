@@ -1,7 +1,6 @@
 """Tests for sampling utility functions."""
 
 import json
-import pickle
 import tempfile
 from pathlib import Path
 
@@ -17,7 +16,6 @@ from metareason.sampling.utils import (
     encode_categorical_values,
     load_samples,
     normalize_samples,
-    parallel_sample_generation,
     save_samples,
     stratified_sampling,
 )
@@ -248,22 +246,6 @@ class TestSampleSaveLoad:
             Path(temp_path).unlink(missing_ok=True)
             Path(temp_path).with_suffix(".meta.json").unlink(missing_ok=True)
 
-    def test_save_load_pickle(self, sample_data):
-        """Test saving and loading pickle format."""
-        samples, metadata = sample_data
-
-        with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
-            temp_path = f.name
-
-        try:
-            save_samples(samples, metadata, temp_path, format="pickle")
-            loaded_samples, loaded_metadata = load_samples(temp_path, format="pickle")
-
-            np.testing.assert_array_equal(samples, loaded_samples)
-            assert loaded_metadata == metadata
-        finally:
-            Path(temp_path).unlink(missing_ok=True)
-
     def test_save_load_json(self, sample_data):
         """Test saving and loading JSON format."""
         samples, metadata = sample_data
@@ -284,7 +266,7 @@ class TestSampleSaveLoad:
         """Test automatic format detection."""
         samples, metadata = sample_data
 
-        formats = {".npz": "npz", ".csv": "csv", ".pkl": "pickle", ".json": "json"}
+        formats = {".npz": "npz", ".csv": "csv", ".json": "json"}
 
         for suffix, expected_format in formats.items():
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:

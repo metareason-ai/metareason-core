@@ -225,3 +225,5 @@ config/local.yaml
 !.vscode/settings.json
 !.vscode/extensions.json
 !.vscode/launch.json
+
+.claude/
