@@ -1,5 +1,6 @@
 """Tests for sampling utility functions."""
 
+import json
 import tempfile
 from pathlib import Path
 

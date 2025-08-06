@@ -151,7 +151,6 @@ def save_samples(
         meta_path = file_path.with_suffix(".meta.json")
         with open(meta_path, "w") as f:
             json.dump(metadata, f, indent=2, default=str)
-
     elif format == "json":
         data = {
             "samples": samples.tolist(),
@@ -203,7 +202,6 @@ def load_samples(
                 metadata = json.load(f)
         else:
             metadata = {}
-
     elif format == "json":
         with open(file_path, "r") as f:
             data = json.load(f)
