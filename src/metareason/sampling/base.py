@@ -1,19 +1,18 @@
 """Base sampler interface for MetaReason sampling strategies."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from ..config.axes import AxisConfigType, CategoricalAxis, ContinuousAxis
+from ..config import AxisConfigType, CategoricalAxis, ContinuousAxis
 
 
 class SampleResult(BaseModel):
     """Result of a sampling operation."""
 
-    model_config = {"arbitrary_types_allowed": True}
-
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     samples: np.ndarray
     metadata: Dict[str, Any]
     quality_metrics: Optional[Dict[str, float]] = None

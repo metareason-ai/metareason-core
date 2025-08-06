@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from ..config.axes import AxisConfigType, CategoricalAxis, ContinuousAxis
+from ..config import AxisConfigType, CategoricalAxis, ContinuousAxis
 
 
 def encode_categorical_values(values: np.ndarray, categories: List[str]) -> np.ndarray:
@@ -56,7 +56,7 @@ def normalize_samples(
     """
     normalized = np.zeros_like(samples, dtype=float)
 
-    for i, (name, config) in enumerate(axis_configs.items()):
+    for i, (_name, config) in enumerate(axis_configs.items()):
         if isinstance(config, ContinuousAxis):
             if config.type == "uniform":
                 normalized[:, i] = (samples[:, i] - config.min) / (
@@ -96,7 +96,7 @@ def denormalize_samples(
     """
     samples = np.empty(normalized.shape, dtype=object)
 
-    for i, (name, config) in enumerate(axis_configs.items()):
+    for i, (_name, config) in enumerate(axis_configs.items()):
         if isinstance(config, ContinuousAxis):
             if config.type == "uniform":
                 samples[:, i] = config.min + normalized[:, i] * (
@@ -293,12 +293,126 @@ def parallel_sample_generation(
     return all_samples[:total_samples]
 
 
+def compute_balance_statistics(
+    samples: np.ndarray,
+    axes: Dict[str, AxisConfigType],
+    stratify_by: List[str],
+    expected_counts: Dict[Tuple, int],
+    n_strata: int,
+) -> Dict[str, Any]:
+    """Compute statistics on sampling balance.
+
+    Args:
+        samples: Generated samples
+        axes: Axis configurations
+        stratify_by: List of axes that were stratified
+        expected_counts: Expected count per stratum
+        n_strata: Total number of strata
+
+    Returns:
+        Dictionary with balance statistics
+    """
+    from scipy import stats as scipy_stats
+
+    statistics = {
+        "stratified_axes": stratify_by,
+        "n_strata": n_strata,
+        "n_samples": len(samples),
+        "per_axis_balance": {},
+        "overall_balance": {},
+    }
+
+    # Analyze balance for each stratified axis
+    axis_indices = {name: list(axes.keys()).index(name) for name in stratify_by}
+
+    for axis_name in stratify_by:
+        axis = axes[axis_name]
+        axis_idx = axis_indices[axis_name]
+        values = samples[:, axis_idx]
+
+        # Count occurrences
+        unique, counts = np.unique(values, return_counts=True)
+        actual_dist = dict(zip(unique, counts / len(samples)))
+
+        # Calculate expected distribution
+        if isinstance(axis, CategoricalAxis):
+            if axis.weights is None:
+                # Uniform distribution expected
+                expected_dist = {v: 1.0 / len(axis.values) for v in axis.values}
+            else:
+                # Weighted distribution expected
+                total_weight = sum(axis.weights)
+                expected_dist = {
+                    v: w / total_weight for v, w in zip(axis.values, axis.weights)
+                }
+
+        # Calculate chi-squared test
+        observed = [
+            counts[list(unique).index(v)] if v in unique else 0 for v in axis.values
+        ]
+        expected = [expected_dist[v] * len(samples) for v in axis.values]
+
+        if all(e > 0 for e in expected):
+            chi2, p_value = scipy_stats.chisquare(observed, expected)
+        else:
+            chi2, p_value = np.nan, np.nan
+
+        # Calculate max deviation
+        max_deviation = max(
+            abs(actual_dist.get(v, 0) - expected_dist[v]) for v in axis.values
+        )
+
+        statistics["per_axis_balance"][axis_name] = {
+            "expected_distribution": expected_dist,
+            "actual_distribution": actual_dist,
+            "chi_squared": float(chi2),
+            "p_value": float(p_value),
+            "max_deviation": float(max_deviation),
+            "balance_score": float(1.0 - max_deviation) if max_deviation < 1 else 0.0,
+        }
+
+    # Calculate overall balance metrics
+    all_deviations = [
+        stats["max_deviation"] for stats in statistics["per_axis_balance"].values()
+    ]
+
+    statistics["overall_balance"] = {
+        "mean_deviation": float(np.mean(all_deviations)),
+        "max_deviation": float(np.max(all_deviations)),
+        "balance_score": float(1.0 - np.mean(all_deviations)),
+    }
+
+    # Add stratum-level statistics if multiple axes
+    if len(stratify_by) > 1:
+        from itertools import product
+
+        strata_combinations = list(
+            product(*[axes[name].values for name in stratify_by])
+        )
+
+        actual_stratum_counts = {}
+        for combination in strata_combinations:
+            mask = np.ones(len(samples), dtype=bool)
+            for axis_name, value in zip(stratify_by, combination):
+                axis_idx = axis_indices[axis_name]
+                mask &= samples[:, axis_idx] == value
+            actual_stratum_counts[combination] = np.sum(mask)
+
+        statistics["stratum_counts"] = {
+            "expected": {str(k): v for k, v in expected_counts.items()},
+            "actual": {str(k): v for k, v in actual_stratum_counts.items()},
+        }
+
+    return statistics
+
+
 def stratified_sampling(
     sampler_class,
     sampler_kwargs: Dict[str, Any],
     stratify_by: List[str],
     ensure_balance: bool = True,
-) -> np.ndarray:
+    return_stats: bool = False,
+) -> Union[np.ndarray, Tuple[np.ndarray, Dict[str, Any]]]:
     """Perform stratified sampling across categorical axes.
 
     Args:
@@ -306,9 +420,10 @@ def stratified_sampling(
         sampler_kwargs: Keyword arguments for sampler
         stratify_by: List of categorical axis names to stratify by
         ensure_balance: Whether to ensure balanced representation
+        return_stats: Whether to return balance statistics
 
     Returns:
-        Stratified samples
+        Stratified samples, or tuple of (samples, statistics) if return_stats=True
     """
     axes = sampler_kwargs["axes"]
     n_samples = sampler_kwargs.get("n_samples", 1000)
@@ -337,6 +452,7 @@ def stratified_sampling(
         remainder = 0
 
     all_samples = []
+    stratum_counts = {}  # Track actual samples per stratum
 
     for i, combination in enumerate(strata_combinations):
         stratum_samples = samples_per_stratum
@@ -353,14 +469,25 @@ def stratified_sampling(
         sampler = sampler_class(**stratum_kwargs)
         result = sampler.sample()
 
-        for j, (axis_name, value) in enumerate(zip(stratify_by, combination)):
+        for _j, (axis_name, value) in enumerate(zip(stratify_by, combination)):
             axis_idx = list(axes.keys()).index(axis_name)
             result.samples[:, axis_idx] = value
 
         all_samples.append(result.samples)
+        stratum_counts[combination] = stratum_samples
 
     combined = np.vstack(all_samples)
 
     rng = np.random.default_rng(sampler_kwargs.get("random_seed", 42))
     shuffle_idx = rng.permutation(len(combined))
-    return combined[shuffle_idx][:n_samples]
+    final_samples = combined[shuffle_idx][:n_samples]
+
+    if not return_stats:
+        return final_samples
+
+    # Compute balance statistics
+    statistics = compute_balance_statistics(
+        final_samples, axes, stratify_by, stratum_counts, n_strata
+    )
+
+    return final_samples, statistics
