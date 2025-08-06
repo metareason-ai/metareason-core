@@ -3,7 +3,7 @@
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import click
 import yaml
@@ -12,7 +12,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
-from ..config import load_yaml_config, validate_yaml_directory, validate_yaml_file
+from ..config import load_yaml_config, validate_yaml_file
 from .utils import compare_configurations, find_config_files, format_validation_report
 
 console = Console()
@@ -137,7 +137,8 @@ def validate(
         else:
             invalid_count = total_files - valid_files
             output_lines.append(
-                f"❌ [bold red]{invalid_count} of {total_files} configuration files have issues[/bold red]"
+                f"❌ [bold red]{invalid_count} of {total_files} "
+                f"configuration files have issues[/bold red]"
             )
 
         output_lines.append("")
@@ -294,7 +295,7 @@ def diff(
     ignore_fields: tuple,
     output: Optional[Path],
 ) -> None:
-    """Compare two configuration files.
+    r"""Compare two configuration files.
 
     Shows differences between two MetaReason configuration files,
     highlighting changes in structure, values, and metadata.
@@ -302,7 +303,8 @@ def diff(
     Examples:
       metareason config diff old.yaml new.yaml
       metareason config diff config1.yaml config2.yaml --format json
-      metareason config diff base.yaml modified.yaml --ignore-fields metadata.created_date
+      metareason config diff base.yaml modified.yaml \
+        --ignore-fields metadata.created_date
     """
     try:
         # Load both configurations
@@ -363,7 +365,6 @@ def cache(clear: bool, stats: bool, disable: bool) -> None:
     Controls the MetaReason configuration cache system for improved performance.
     """
     from ..config.cache import (
-        clear_global_cache,
         disable_caching,
         get_global_cache,
         is_caching_enabled,
@@ -465,7 +466,7 @@ def _format_text_diff(diff_result: dict) -> str:
         lines.append("✅ [green]No differences found[/green]")
         return "\n".join(lines)
 
-    lines.append(f"🔍 [bold]Comparing configurations:[/bold]")
+    lines.append("🔍 [bold]Comparing configurations:[/bold]")
     lines.append(f"   📄 {diff_result.get('file1_name', 'file1')}")
     lines.append(f"   📄 {diff_result.get('file2_name', 'file2')}")
     lines.append("")
