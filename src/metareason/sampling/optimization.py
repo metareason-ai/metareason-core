@@ -1,7 +1,7 @@
 """Optimization strategies for Latin Hypercube Sampling."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -96,7 +96,7 @@ class MaximinOptimizer(BaseOptimizer):
         np.fill_diagonal(distances, np.inf)
         min_distance = np.min(distances)
 
-        return min_distance
+        return float(min_distance)
 
 
 class CorrelationMinimizer(BaseOptimizer):
@@ -116,7 +116,7 @@ class CorrelationMinimizer(BaseOptimizer):
         best_samples = samples.copy()
         best_criterion = self.compute_criterion(best_samples)
 
-        for iteration in range(n_iterations):
+        for _iteration in range(n_iterations):
             corr_matrix = np.corrcoef(samples.T)
             np.fill_diagonal(corr_matrix, 0)
 
@@ -203,7 +203,7 @@ class ESIOptimizer(BaseOptimizer):
         min_dist_i = np.min(distances_i)
         min_dist_j = np.min(distances_j)
 
-        return min_dist_i + min_dist_j
+        return float(min_dist_i + min_dist_j)
 
     def compute_criterion(self, samples: np.ndarray) -> float:
         """Compute the phi_p criterion.
@@ -228,8 +228,8 @@ class CustomOptimizer(BaseOptimizer):
 
     def __init__(
         self,
-        optimize_func=None,
-        criterion_func=None,
+        optimize_func: Optional[Callable[[np.ndarray, int], np.ndarray]] = None,
+        criterion_func: Optional[Callable[[np.ndarray], float]] = None,
         random_seed: Optional[int] = None,
     ) -> None:
         """Initialize custom optimizer.
@@ -256,7 +256,7 @@ class CustomOptimizer(BaseOptimizer):
         if self.optimize_func is None:
             return samples
 
-        return self.optimize_func(samples, n_iterations, self.rng)
+        return self.optimize_func(samples, n_iterations)
 
     def compute_criterion(self, samples: np.ndarray) -> float:
         """Compute custom criterion.
@@ -270,7 +270,7 @@ class CustomOptimizer(BaseOptimizer):
         if self.criterion_func is None:
             return 0.0
 
-        return self.criterion_func(samples)
+        return float(self.criterion_func(samples))
 
 
 def benchmark_optimizers(
@@ -295,7 +295,7 @@ def benchmark_optimizers(
     iterator = tqdm(optimizers.items()) if show_progress else optimizers.items()
 
     for name, optimizer in iterator:
-        if show_progress:
+        if show_progress and hasattr(iterator, "set_description"):
             iterator.set_description(f"Benchmarking {name}")
 
         import time

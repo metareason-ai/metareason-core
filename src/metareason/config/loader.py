@@ -183,7 +183,7 @@ def load_yaml_configs(directory: Union[str, Path]) -> Dict[str, EvaluationConfig
 
     if errors and not configs:
         raise ValueError(
-            f"Failed to load any configuration files. Errors:\n" + "\n".join(errors)
+            "Failed to load any configuration files. Errors:\n" + "\n".join(errors)
         )
 
     return configs
@@ -322,7 +322,8 @@ def _resolve_config_path(
     raise FileNotFoundError(
         f"Configuration file '{file_path}' not found. "
         f"Searched in: {', '.join(str(loc) for loc in searched_locations)}. "
-        f"Suggestion: Check the file path or place the file in one of the searched directories."
+        "Suggestion: Check the file path or place the file in one of the "
+        "searched directories."
     )
 
 

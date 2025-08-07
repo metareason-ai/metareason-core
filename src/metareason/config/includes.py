@@ -10,28 +10,29 @@ import yaml
 class IncludeLoader(yaml.SafeLoader):
     """Custom YAML loader that supports !include tags."""
 
-    def __init__(self, stream, base_dir: Path):
+    def __init__(self, stream: Any, base_dir: Path) -> None:
         super().__init__(stream)
         self.base_dir = base_dir
         self.included_files: Set[Path] = set()
 
-    def include(self, node):
+    def include(self, node: Any) -> Any:
         """Handle !include tag."""
-        include_path = self.construct_scalar(node)
+        include_path_str = self.construct_scalar(node)
 
         # Resolve the include path relative to the current file
-        if not os.path.isabs(include_path):
-            include_path = self.base_dir / include_path
+        if not os.path.isabs(include_path_str):
+            include_path = self.base_dir / include_path_str
         else:
-            include_path = Path(include_path)
+            include_path = Path(include_path_str)
 
         include_path = include_path.resolve()
 
         # Check for circular dependencies
         if include_path in self.included_files:
             raise yaml.YAMLError(
-                f"Circular dependency detected: {include_path} is already being processed. "
-                f"Included files: {sorted(str(f) for f in self.included_files)}"
+                f"Circular dependency detected: {include_path} is already being "
+                f"processed. Included files: "
+                f"{sorted(str(f) for f in self.included_files)}"
             )
 
         # Check if file exists
@@ -51,12 +52,13 @@ class IncludeLoader(yaml.SafeLoader):
                 included_files_ref = self.included_files
 
                 class NestedIncludeLoader(IncludeLoader):
-                    def __init__(self, stream):
+                    def __init__(self, stream: Any) -> None:
                         super().__init__(stream, include_path.parent)
                         self.included_files = included_files_ref.copy()
 
                 try:
-                    data = yaml.load(f, Loader=NestedIncludeLoader)
+                    # Safe: NestedIncludeLoader inherits from yaml.SafeLoader
+                    data = yaml.load(f, Loader=NestedIncludeLoader)  # nosec B506
                     return data
                 finally:
                     # Remove from included files set when done
@@ -102,10 +104,11 @@ def load_yaml_with_includes(file_path: Union[str, Path]) -> Any:
         with open(path, "r", encoding="utf-8") as f:
             # Create a custom loader class for this specific file
             class FileSpecificIncludeLoader(IncludeLoader):
-                def __init__(self, stream):
+                def __init__(self, stream: Any) -> None:
                     super().__init__(stream, path.parent)
 
-            return yaml.load(f, Loader=FileSpecificIncludeLoader)
+            # Safe: FileSpecificIncludeLoader inherits from yaml.SafeLoader
+            return yaml.load(f, Loader=FileSpecificIncludeLoader)  # nosec B506
 
     except yaml.YAMLError as e:
         raise yaml.YAMLError(
@@ -182,7 +185,8 @@ def resolve_inheritance(config_data: Dict[str, Any]) -> Dict[str, Any]:
         parent_data = load_yaml_with_includes(inherit_path)
         if not isinstance(parent_data, dict):
             raise ValueError(
-                f"Parent configuration must be a dictionary, got {type(parent_data).__name__}"
+                f"Parent configuration must be a dictionary, got "
+                f"{type(parent_data).__name__}"
             )
 
         # Recursively resolve inheritance in parent

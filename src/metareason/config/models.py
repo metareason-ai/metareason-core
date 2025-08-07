@@ -256,7 +256,7 @@ class EvaluationConfig(BaseModel):
                 continuous_axes += 1
 
         # Rule of thumb: need at least 10 samples per categorical combination
-        min_variants_needed = categorical_combinations * 10
+        # min_variants_needed = categorical_combinations * 10
 
         # This is a warning-level check, not a hard requirement
         # The spec example actually violates this rule (576 combinations, 2000 variants)

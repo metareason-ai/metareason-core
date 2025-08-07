@@ -2,11 +2,13 @@
 
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import click
 from rich.console import Console
 from rich.traceback import install
+
+from .config import config_group
 
 # Install rich tracebacks for better error reporting
 install(show_locals=True)
@@ -39,9 +41,7 @@ def cli(ctx: click.Context, verbose: bool, config_dir: Optional[Path]) -> None:
         console.print("[dim]MetaReason CLI initialized[/dim]")
 
 
-# Import and register command groups
-from .config import config_group
-
+# Register command groups
 cli.add_command(config_group)
 
 
@@ -65,10 +65,13 @@ def info(ctx: click.Context, output_format: str) -> None:
     from metareason.config.cache import get_global_cache, is_caching_enabled
     from metareason.config.environment import get_environment_info
 
-    info_data = {
+    info_data: Dict[str, Any] = {
         "metareason": {"version": __version__, "timestamp": datetime.now().isoformat()},
         "system": {
-            "python_version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            "python_version": (
+                f"{sys.version_info.major}.{sys.version_info.minor}."
+                f"{sys.version_info.micro}"
+            ),
             "platform": sys.platform,
             "executable": sys.executable,
         },
@@ -87,13 +90,15 @@ def info(ctx: click.Context, output_format: str) -> None:
         # Text format
         console.print(f"🔧 [bold blue]MetaReason CLI[/bold blue] v{__version__}")
         console.print(
-            f"🐍 Python {info_data['system']['python_version']} on {info_data['system']['platform']}"
+            f"🐍 Python {info_data['system']['python_version']} "
+            f"on {info_data['system']['platform']}"
         )
 
         if info_data["cache"]["enabled"]:
             stats = info_data["cache"]["stats"]
             console.print(
-                f"💾 Cache: {stats['active_entries']} active, {stats['expired_entries']} expired"
+                f"💾 Cache: {stats['active_entries']} active, "
+                f"{stats['expired_entries']} expired"
             )
         else:
             console.print("💾 Cache: disabled")
@@ -125,14 +130,19 @@ def run(
         config = load_yaml_config(config_file)
 
         if dry_run:
-            console.print(f"[dim]Would run evaluation with configuration:[/dim]")
+            console.print("[dim]Would run evaluation with configuration:[/dim]")
             console.print(f"📄 Config: {config_file}")
             console.print(f"🎯 Prompt: {config.prompt_id}")
             console.print(f"🔢 Variants: {config.n_variants}")
-            console.print(f"📊 Sampling: {config.sampling.method}")
             console.print(
-                f"🔍 Oracles: {len([o for o in [config.oracles.accuracy, config.oracles.explainability, config.oracles.confidence_calibration] if o])}"
+                f"📊 Sampling: {config.sampling.method if config.sampling else 'None'}"
             )
+            oracles = [
+                config.oracles.accuracy,
+                config.oracles.explainability,
+                config.oracles.confidence_calibration,
+            ]
+            console.print(f"🔍 Oracles: {len([o for o in oracles if o])}")
             if output:
                 console.print(f"💾 Output: {output}")
         else:

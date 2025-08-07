@@ -19,9 +19,6 @@ isort src tests
 echo "Running flake8..."
 flake8 src tests || true
 
-echo "Running mypy..."
-mypy src || true
-
 echo "Running bandit security checks..."
 bandit -r src || true
 

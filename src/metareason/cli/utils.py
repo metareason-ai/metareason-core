@@ -1,7 +1,7 @@
 """CLI utility functions for MetaReason."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from rich.markup import escape
 from rich.table import Table
@@ -29,7 +29,7 @@ def find_config_files(directory: Path, recursive: bool = True) -> List[Path]:
         raise ValueError(f"Path is not a directory: {directory}")
 
     # Find YAML files
-    yaml_files = []
+    yaml_files: List[Path] = []
 
     if recursive:
         yaml_files.extend(directory.rglob("*.yaml"))
@@ -127,7 +127,7 @@ def compare_configurations(
     dict2 = config2.model_dump()
 
     # Compare dictionaries
-    changes = []
+    changes: List[Dict[str, Any]] = []
     _compare_dicts(dict1, dict2, "", changes, ignore_set)
 
     # Generate summary
@@ -213,7 +213,9 @@ def create_config_summary_table(config: EvaluationConfig) -> Table:
     # Basic information
     table.add_row("Prompt ID", config.prompt_id)
     table.add_row("Variants", str(config.n_variants))
-    table.add_row("Sampling Method", config.sampling.method)
+    table.add_row(
+        "Sampling Method", config.sampling.method if config.sampling else "None"
+    )
 
     # Axes
     axis_count = len(config.axes)
@@ -320,11 +322,12 @@ def format_file_size(size_bytes: int) -> str:
     Returns:
         Formatted file size string
     """
+    size_float = float(size_bytes)
     for unit in ["B", "KB", "MB", "GB"]:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.1f} TB"
+        if size_float < 1024.0:
+            return f"{size_float:.1f} {unit}"
+        size_float /= 1024.0
+    return f"{size_float:.1f} TB"
 
 
 def truncate_text(text: str, max_length: int = 80) -> str:
@@ -342,7 +345,9 @@ def truncate_text(text: str, max_length: int = 80) -> str:
     return text[: max_length - 3] + "..."
 
 
-def create_progress_callback(console, total: int, description: str = "Processing"):
+def create_progress_callback(
+    console: Any, total: int, description: str = "Processing"
+) -> Tuple[Any, Callable[[int], None]]:
     """Create a progress callback for long-running operations.
 
     Args:
@@ -371,7 +376,7 @@ def create_progress_callback(console, total: int, description: str = "Processing
 
     task = progress.add_task(description, total=total)
 
-    def callback(completed: int = 1):
+    def callback(completed: int = 1) -> None:
         """Update progress by specified amount."""
         progress.update(task, advance=completed)
 
