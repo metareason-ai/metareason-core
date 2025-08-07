@@ -13,7 +13,8 @@
         "--config=pyproject.toml"
     ],
     "python.sortImports.args": [
-        "--profile", "black"
+        "--profile",
+        "black"
     ],
     "[python]": {
         "editor.formatOnSave": true,
@@ -40,8 +41,13 @@
         "dist": true,
         "build": true
     },
-    "editor.rulers": [88],
+    "editor.rulers": [
+        88
+    ],
     "files.trimTrailingWhitespace": true,
     "files.insertFinalNewline": true,
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "cSpell.words": [
+        "metareason"
+    ]
 }

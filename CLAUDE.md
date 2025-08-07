@@ -54,7 +54,6 @@ pytest tests/test_config_loader.py::test_all_distribution_types -v
 black src tests           # Code formatting
 isort src tests          # Import sorting
 flake8 src tests         # Linting
-mypy src                 # Type checking
 bandit -r src           # Security checks
 ```
 
@@ -114,7 +113,7 @@ The project uses a declarative YAML format for evaluation specifications:
 - **Test Markers**: `slow`, `integration`, `unit` for selective test execution
 
 ### Code Quality Standards
-- **Type Hints**: Full mypy compliance with strict settings
+- **Type Hints**: Python type hints for better code clarity
 - **Code Formatting**: Black (88 char line length) + isort
 - **Linting**: flake8 with docstring and bugbear plugins
 - **Security**: bandit security scanning

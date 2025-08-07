@@ -115,10 +115,24 @@ class BaseSampler(ABC):
             Transformed values according to the distribution
         """
         if axis.type == "uniform":
+            if axis.min is None or axis.max is None:
+                raise ValueError(
+                    "Uniform axis requires both min and max to be specified"
+                )
             return axis.min + unit_values * (axis.max - axis.min)
 
         elif axis.type == "truncated_normal":
             from scipy import stats
+
+            if (
+                axis.min is None
+                or axis.max is None
+                or axis.mu is None
+                or axis.sigma is None
+            ):
+                raise ValueError(
+                    "Truncated normal axis requires min, max, mu, and sigma to be specified"
+                )
 
             a = (axis.min - axis.mu) / axis.sigma
             b = (axis.max - axis.mu) / axis.sigma

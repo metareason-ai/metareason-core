@@ -3,7 +3,7 @@
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, cast
 
 from .models import EvaluationConfig
 
@@ -54,7 +54,7 @@ class ConfigCache:
                     if current_mtime != cache_entry["mtime"]:
                         del self._cache[cache_key]
                         return None
-                except (OSError, IOError):
+                except OSError:
                     # File might have been deleted or become inaccessible
                     del self._cache[cache_key]
                     return None
@@ -67,7 +67,7 @@ class ConfigCache:
                 del self._cache[cache_key]
                 return None
 
-            return cache_entry["config"]
+            return cast(EvaluationConfig, cache_entry["config"])
 
     def set(self, file_path: Union[str, Path], config: EvaluationConfig) -> None:
         """Cache a configuration.
@@ -85,7 +85,7 @@ class ConfigCache:
                 if self._enable_hot_reload and path.exists()
                 else 0.0
             )
-        except (OSError, IOError):
+        except OSError:
             mtime = 0.0
 
         with self._lock:

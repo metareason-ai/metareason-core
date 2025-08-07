@@ -3,7 +3,7 @@
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import click
 import yaml
@@ -12,7 +12,8 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
 
-from ..config import load_yaml_config, validate_yaml_directory, validate_yaml_file
+from ..config import load_yaml_config, validate_yaml_file
+from ..config.validator import ValidationReport
 from .utils import compare_configurations, find_config_files, format_validation_report
 
 console = Console()
@@ -38,7 +39,7 @@ def config_group() -> None:
 @click.option(
     "--format",
     "output_format",
-    type=click.Choice(["text", "json", "junit"]),
+    type=click.Choice(["text", "json"]),
     default="text",
     help="Output format",
 )
@@ -51,7 +52,7 @@ def config_group() -> None:
 @click.pass_context
 def validate(
     ctx: click.Context,
-    files: tuple,
+    files: Tuple[Any, ...],
     directory: Optional[Path],
     strict: bool,
     output_format: str,
@@ -88,7 +89,7 @@ def validate(
         sys.exit(1)
 
     # Validate files
-    results = {}
+    results: Dict[str, Optional[ValidationReport]] = {}
     total_files = len(config_files)
     valid_files = 0
 
@@ -108,22 +109,19 @@ def validate(
     # Output results
     if output_format == "json":
         json_results = {}
-        for file_path, report in results.items():
-            if report:
+        for file_path in results:
+            file_report: Optional[ValidationReport] = results[file_path]
+            if file_report is not None:
                 json_results[file_path] = {
-                    "valid": report.is_valid,
-                    "errors": report.errors,
-                    "warnings": report.warnings,
-                    "suggestions": report.suggestions,
+                    "valid": file_report.is_valid,
+                    "errors": file_report.errors,
+                    "warnings": file_report.warnings,
+                    "suggestions": file_report.suggestions,
                 }
             else:
                 json_results[file_path] = {"valid": False, "fatal_error": True}
 
         output_data = json.dumps(json_results, indent=2)
-
-    elif output_format == "junit":
-        # Generate JUnit XML format for CI/CD integration
-        output_data = _generate_junit_xml(results)
 
     else:
         # Text format
@@ -137,15 +135,19 @@ def validate(
         else:
             invalid_count = total_files - valid_files
             output_lines.append(
-                f"❌ [bold red]{invalid_count} of {total_files} configuration files have issues[/bold red]"
+                f"❌ [bold red]{invalid_count} of {total_files} "
+                f"configuration files have issues[/bold red]"
             )
 
         output_lines.append("")
 
         # Individual file results
-        for file_path, report in results.items():
-            if report:
-                output_lines.append(format_validation_report(report, file_path))
+        for file_path in results:
+            validation_report: Optional[ValidationReport] = results[file_path]
+            if validation_report is not None:
+                output_lines.append(
+                    format_validation_report(validation_report, file_path)
+                )
             else:
                 output_lines.append(
                     f"💥 [red]{file_path}: Fatal error during validation[/red]"
@@ -291,10 +293,10 @@ def diff(
     file1: Path,
     file2: Path,
     output_format: str,
-    ignore_fields: tuple,
+    ignore_fields: Tuple[str, ...],
     output: Optional[Path],
 ) -> None:
-    """Compare two configuration files.
+    r"""Compare two configuration files.
 
     Shows differences between two MetaReason configuration files,
     highlighting changes in structure, values, and metadata.
@@ -302,7 +304,8 @@ def diff(
     Examples:
       metareason config diff old.yaml new.yaml
       metareason config diff config1.yaml config2.yaml --format json
-      metareason config diff base.yaml modified.yaml --ignore-fields metadata.created_date
+      metareason config diff base.yaml modified.yaml \
+        --ignore-fields metadata.created_date
     """
     try:
         # Load both configurations
@@ -362,12 +365,7 @@ def cache(clear: bool, stats: bool, disable: bool) -> None:
 
     Controls the MetaReason configuration cache system for improved performance.
     """
-    from ..config.cache import (
-        clear_global_cache,
-        disable_caching,
-        get_global_cache,
-        is_caching_enabled,
-    )
+    from ..config.cache import disable_caching, get_global_cache, is_caching_enabled
 
     if disable:
         disable_caching()
@@ -405,41 +403,7 @@ def cache(clear: bool, stats: bool, disable: bool) -> None:
         console.print(f"💾 Cache: {stats_data['active_entries']} active entries")
 
 
-def _generate_junit_xml(results: dict) -> str:
-    """Generate JUnit XML format for test results."""
-    from xml.etree.ElementTree import Element, SubElement, tostring
-
-    testsuites = Element("testsuites")
-    testsuite = SubElement(
-        testsuites,
-        "testsuite",
-        {
-            "name": "metareason-config-validation",
-            "tests": str(len(results)),
-            "failures": str(sum(1 for r in results.values() if r and not r.is_valid)),
-            "errors": str(sum(1 for r in results.values() if r is None)),
-        },
-    )
-
-    for file_path, report in results.items():
-        testcase = SubElement(
-            testsuite,
-            "testcase",
-            {"name": Path(file_path).name, "classname": "config.validation"},
-        )
-
-        if report is None:
-            SubElement(testcase, "error", {"message": "Fatal validation error"})
-        elif not report.is_valid:
-            failure = SubElement(testcase, "failure", {"message": "Validation failed"})
-            failure.text = "\n".join(
-                f"{err['field']}: {err['message']}" for err in report.errors
-            )
-
-    return tostring(testsuites, encoding="unicode")
-
-
-def _format_unified_diff(diff_result: dict) -> str:
+def _format_unified_diff(diff_result: Dict[str, Any]) -> str:
     """Format diff result as unified diff."""
     lines = []
     lines.append(f"--- {diff_result.get('file1_name', 'file1')}")
@@ -457,7 +421,7 @@ def _format_unified_diff(diff_result: dict) -> str:
     return "\n".join(lines)
 
 
-def _format_text_diff(diff_result: dict) -> str:
+def _format_text_diff(diff_result: Dict[str, Any]) -> str:
     """Format diff result as readable text."""
     lines = []
 
@@ -465,7 +429,7 @@ def _format_text_diff(diff_result: dict) -> str:
         lines.append("✅ [green]No differences found[/green]")
         return "\n".join(lines)
 
-    lines.append(f"🔍 [bold]Comparing configurations:[/bold]")
+    lines.append("🔍 [bold]Comparing configurations:[/bold]")
     lines.append(f"   📄 {diff_result.get('file1_name', 'file1')}")
     lines.append(f"   📄 {diff_result.get('file2_name', 'file2')}")
     lines.append("")

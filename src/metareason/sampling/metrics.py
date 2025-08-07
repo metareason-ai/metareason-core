@@ -1,10 +1,9 @@
 """Quality metrics for evaluating sampling distributions."""
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 from scipy import stats
 from scipy.spatial.distance import cdist
 from scipy.stats import qmc

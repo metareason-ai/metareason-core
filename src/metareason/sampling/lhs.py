@@ -91,7 +91,7 @@ class LatinHypercubeSampler(BaseSampler):
             "correlation": "random-cd",
             "esi": "random-cd",
         }
-        return mapping.get(self.optimization)
+        return mapping.get(self.optimization) if self.optimization is not None else None
 
     def generate_samples(self) -> np.ndarray:
         """Generate Latin Hypercube samples in the unit hypercube.

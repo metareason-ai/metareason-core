@@ -20,18 +20,20 @@ class ValidationReport:
         self.suggestions: List[str] = []
         self.is_valid = True
 
-    def add_error(self, field: str, message: str, suggestion: Optional[str] = None):
+    def add_error(
+        self, field: str, message: str, suggestion: Optional[str] = None
+    ) -> None:
         """Add an error to the report."""
         self.errors.append(
             {"field": field, "message": message, "suggestion": suggestion}
         )
         self.is_valid = False
 
-    def add_warning(self, message: str):
+    def add_warning(self, message: str) -> None:
         """Add a warning to the report."""
         self.warnings.append(message)
 
-    def add_suggestion(self, message: str):
+    def add_suggestion(self, message: str) -> None:
         """Add a suggestion to the report."""
         self.suggestions.append(message)
 
@@ -130,9 +132,8 @@ def _add_warnings_and_suggestions(
     raw_data: Dict[str, Any],
     report: ValidationReport,
     strict: bool,
-):
+) -> None:
     """Add warnings and suggestions based on best practices."""
-
     # Check for unused axes
     template_vars = set()
     import re

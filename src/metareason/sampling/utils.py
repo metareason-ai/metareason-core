@@ -58,12 +58,23 @@ def normalize_samples(
     for i, (_name, config) in enumerate(axis_configs.items()):
         if isinstance(config, ContinuousAxis):
             if config.type == "uniform":
+                if config.min is None or config.max is None:
+                    raise ValueError("min and max must be set for uniform axis")
                 normalized[:, i] = (samples[:, i] - config.min) / (
                     config.max - config.min
                 )
             elif config.type == "truncated_normal":
                 from scipy import stats
 
+                if (
+                    config.min is None
+                    or config.max is None
+                    or config.mu is None
+                    or config.sigma is None
+                ):
+                    raise ValueError(
+                        "min, max, mu, and sigma must be set for truncated_normal axis"
+                    )
                 a = (config.min - config.mu) / config.sigma
                 b = (config.max - config.mu) / config.sigma
                 dist = stats.truncnorm(a, b, loc=config.mu, scale=config.sigma)
@@ -71,6 +82,8 @@ def normalize_samples(
             elif config.type == "beta":
                 from scipy import stats
 
+                if config.alpha is None or config.beta is None:
+                    raise ValueError("alpha and beta must be set for beta axis")
                 dist = stats.beta(config.alpha, config.beta)
                 normalized[:, i] = dist.cdf(samples[:, i])
 
@@ -98,12 +111,23 @@ def denormalize_samples(
     for i, (_name, config) in enumerate(axis_configs.items()):
         if isinstance(config, ContinuousAxis):
             if config.type == "uniform":
+                if config.min is None or config.max is None:
+                    raise ValueError("min and max must be set for uniform axis")
                 samples[:, i] = config.min + normalized[:, i] * (
                     config.max - config.min
                 )
             elif config.type == "truncated_normal":
                 from scipy import stats
 
+                if (
+                    config.min is None
+                    or config.max is None
+                    or config.mu is None
+                    or config.sigma is None
+                ):
+                    raise ValueError(
+                        "min, max, mu, and sigma must be set for truncated_normal axis"
+                    )
                 a = (config.min - config.mu) / config.sigma
                 b = (config.max - config.mu) / config.sigma
                 dist = stats.truncnorm(a, b, loc=config.mu, scale=config.sigma)
@@ -111,6 +135,8 @@ def denormalize_samples(
             elif config.type == "beta":
                 from scipy import stats
 
+                if config.alpha is None or config.beta is None:
+                    raise ValueError("alpha and beta must be set for beta axis")
                 dist = stats.beta(config.alpha, config.beta)
                 samples[:, i] = dist.ppf(normalized[:, i])
 
@@ -234,7 +260,7 @@ def parallel_sample_generation(
         Combined samples array
     """
 
-    def generate_batch(batch_idx: int, batch_size: int, seed: int):
+    def generate_batch(batch_idx: int, batch_size: int, seed: int) -> np.ndarray:
         """Generate a single batch of samples."""
         kwargs = sampler_kwargs.copy()
         kwargs["n_samples"] = batch_size
@@ -254,7 +280,7 @@ def parallel_sample_generation(
 
     batch_seeds = [base_seed + i * 1000 for i in range(n_batches)]
 
-    all_samples = []
+    all_samples: list[np.ndarray] = []
 
     with ProcessPoolExecutor(max_workers=n_workers) as executor:
         futures = {
@@ -269,13 +295,11 @@ def parallel_sample_generation(
         else:
             futures_iter = as_completed(futures)
 
-        results = [None] * n_batches
         for future in futures_iter:
-            batch_idx = futures[future]
-            results[batch_idx] = future.result()
+            all_samples.append(future.result())
 
-    all_samples = np.vstack(results)
-    return all_samples[:total_samples]
+    combined_samples = np.vstack(all_samples)
+    return combined_samples[:total_samples]
 
 
 def compute_balance_statistics(

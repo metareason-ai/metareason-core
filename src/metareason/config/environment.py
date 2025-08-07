@@ -2,7 +2,7 @@
 
 import os
 import re
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Union
 
 
 class EnvironmentSubstitutionError(Exception):
@@ -58,7 +58,9 @@ def substitute_environment_variables(
         return value
 
 
-def _substitute_in_string(text: str, strict: bool, prefix: str, suffix: str) -> str:
+def _substitute_in_string(
+    text: str, strict: bool, prefix: str, suffix: str
+) -> Union[str, int, float, bool]:
     """Substitute environment variables in a string value."""
     if prefix not in text:
         return text
@@ -70,7 +72,7 @@ def _substitute_in_string(text: str, strict: bool, prefix: str, suffix: str) -> 
     # Pattern to match ${VAR}, ${VAR:default}, ${VAR:-default}, ${VAR:?message}
     pattern = f"{escaped_prefix}([A-Za-z_][A-Za-z0-9_]*)([:?-].*?)?{escaped_suffix}"
 
-    def replace_var(match):
+    def replace_var(match: Any) -> str:
         var_name = match.group(1)
         modifier = match.group(2)
 
@@ -91,7 +93,7 @@ def _substitute_in_string(text: str, strict: bool, prefix: str, suffix: str) -> 
                 )
             else:
                 # In non-strict mode, leave unchanged for debugging
-                return match.group(0)
+                return str(match.group(0))
 
         elif modifier.startswith(":?"):
             # ${VAR:?message} format - required with custom error
@@ -105,18 +107,21 @@ def _substitute_in_string(text: str, strict: bool, prefix: str, suffix: str) -> 
             # ${VAR:-default} or ${VAR:default} format - optional with default
             if strict:
                 raise EnvironmentSubstitutionError(
-                    f"Environment variable '{var_name}' is not set and strict mode is enabled. "
-                    f"Suggestion: Set the variable with 'export {var_name}=value'"
+                    f"Environment variable '{var_name}' is not set and strict mode "
+                    f"is enabled. Suggestion: Set the variable with 'export "
+                    f"{var_name}=value'"
                 )
 
             default_value = modifier[2:] if modifier.startswith(":-") else modifier[1:]
-            return default_value
+            coerced = _coerce_type(default_value)
+            return str(coerced) if isinstance(coerced, (int, float, bool)) else coerced
 
         else:
             # Unknown modifier format
             raise EnvironmentSubstitutionError(
                 f"Invalid environment variable syntax: {match.group(0)}. "
-                f"Supported formats: ${{VAR}}, ${{VAR:default}}, ${{VAR:-default}}, ${{VAR:?message}}"
+                "Supported formats: ${VAR}, ${VAR:default}, ${VAR:-default}, "
+                "${VAR:?message}"
             )
 
     try:
@@ -141,7 +146,7 @@ def _substitute_in_string(text: str, strict: bool, prefix: str, suffix: str) -> 
 def _coerce_type(value: str) -> Union[str, int, float, bool]:
     """Coerce string value to appropriate type."""
     if not isinstance(value, str):
-        return value
+        return value  # type: ignore
 
     # Handle boolean values
     if value.lower() in ("true", "yes", "1", "on"):
@@ -232,7 +237,7 @@ def validate_required_environment_vars(config_data: Dict[str, Any]) -> Dict[str,
     missing_vars = []
     found_vars = []
 
-    def scan_for_vars(obj: Any, path: str = ""):
+    def scan_for_vars(obj: Any, path: str = "") -> None:
         """Recursively scan for environment variable references."""
         if isinstance(obj, str):
             # Look for ${VAR} patterns
