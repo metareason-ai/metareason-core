@@ -5,7 +5,6 @@ import pytest
 
 from metareason.config.axes import CategoricalAxis, ContinuousAxis
 from metareason.sampling import LatinHypercubeSampler
-from metareason.sampling.base import BaseSampler
 
 
 class TestBaseSamplerCoverage:

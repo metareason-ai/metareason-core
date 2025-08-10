@@ -26,9 +26,18 @@ def demo_basic_loading():
     print(f"📊 Variants: {config.n_variants}")
     print(f"🎲 Sampling: {config.sampling.method}")
     print(f"📏 Axes: {len(config.axes)}")
-    print(
-        f"🔍 Oracles: {sum([1 for o in [config.oracles.accuracy, config.oracles.explainability, config.oracles.confidence_calibration] if o])}"
+    oracle_count = sum(
+        [
+            1
+            for o in [
+                config.oracles.accuracy,
+                config.oracles.explainability,
+                config.oracles.confidence_calibration,
+            ]
+            if o
+        ]
     )
+    print(f"🔍 Oracles: {oracle_count}")
     print()
 
 
@@ -60,12 +69,12 @@ def demo_advanced_features():
             yaml_file, enable_includes=True, enable_env_substitution=True
         )
 
-        print(f"✅ Successfully loaded with inheritance and includes")
+        print("✅ Successfully loaded with inheritance and includes")
         print(f"📋 Prompt ID: {config.prompt_id}")
         print(f"📊 Variants: {config.n_variants}")
-        print(f"🌍 Environment substitution: ✅")
-        print(f"📄 Inheritance: ✅ (from base_config.yaml)")
-        print(f"📎 Includes: ✅ (shared_oracles.yaml)")
+        print("🌍 Environment substitution: ✅")
+        print("📄 Inheritance: ✅ (from base_config.yaml)")
+        print("📎 Includes: ✅ (shared_oracles.yaml)")
 
         # Show some inherited/substituted values
         print(f"🏢 Company: {config.metadata.created_by}")
@@ -104,7 +113,7 @@ def demo_environment_variables():
                 yaml_file, enable_env_substitution=True, env_strict=False
             )
 
-            print(f"✅ Environment variables substituted successfully")
+            print("✅ Environment variables substituted successfully")
             print(f"📋 Prompt ID: {config.prompt_id}")
             print(f"🎯 Accuracy threshold: {config.oracles.accuracy.threshold}")
             print(f"⚖️  Judge model: {config.oracles.explainability.judge_model}")

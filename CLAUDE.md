@@ -65,6 +65,9 @@ metareason info
 # Validate configuration
 metareason config validate examples/simple_evaluation.yaml
 
+# Generate templates from configuration
+metareason templates generate examples/simple_evaluation.yaml --output templates.json
+
 # Run evaluation (dry run)
 metareason run examples/simple_evaluation.yaml --dry-run
 
@@ -82,7 +85,8 @@ MetaReason Core is a statistical evaluation framework for Large Language Models 
 - **Sampling Module** (`metareason.sampling`): Latin Hypercube Sampling and optimization strategies
 - **Oracles Module** (`metareason.oracles`): Evaluation criteria (accuracy, explainability, confidence calibration)
 - **Analysis Module** (`metareason.analysis`): Bayesian statistical analysis with PyMC
-- **Adapters Module** (`metareason.adapters`): LLM provider integrations
+- **Adapters Module** (`metareason.adapters`): LLM provider integrations (OpenAI, Anthropic)
+- **Templates Module** (`metareason.templates`): Jinja2-based prompt generation and rendering
 - **Utils Module** (`metareason.utils`): Shared utilities and helpers
 
 ### Key Design Patterns
@@ -99,12 +103,45 @@ The project uses a declarative YAML format for evaluation specifications:
 - **Oracle Definitions**: Multiple evaluation criteria (embedding similarity, LLM-as-judge, custom)
 - **Statistical Configuration**: Bayesian inference settings
 
+### Adapter System
+The project includes a comprehensive adapter system for LLM providers:
+
+#### Supported Providers
+- **OpenAI**: Full API integration with rate limiting and retry logic
+- **Anthropic**: Complete Claude API support with async operations
+- **Azure OpenAI**: Configuration ready (implementation planned)
+- **HuggingFace**: Configuration ready (implementation planned)
+
+#### Key Features
+- **Plugin Architecture**: Registry-based adapter discovery and loading
+- **Rate Limiting**: Configurable rate limits with automatic backoff
+- **Retry Logic**: Exponential backoff with configurable retry strategies
+- **Error Handling**: Comprehensive error types for different failure modes
+- **Async Support**: Full async/await support for performance
+
+#### Configuration
+```yaml
+adapters:
+  primary:
+    type: openai
+    model: gpt-4
+    api_key: ${OPENAI_API_KEY}
+    rate_limit:
+      requests_per_minute: 60
+      tokens_per_minute: 80000
+    retry:
+      max_attempts: 3
+      backoff_factor: 2.0
+```
+
 ### Development Workflow
 1. **Configuration Management**: All evaluations start with YAML configuration files
-2. **Sampling Strategy**: Latin Hypercube Sampling generates parameter space coverage
-3. **Oracle Evaluation**: Multiple oracles provide different quality assessments
-4. **Statistical Analysis**: Bayesian models quantify confidence and uncertainty
-5. **Results Output**: Rich console output and structured data formats
+2. **Template Generation**: Jinja2 templates with variable substitution generate prompts
+3. **Sampling Strategy**: Latin Hypercube Sampling generates parameter space coverage
+4. **LLM Interaction**: Adapters handle API calls with rate limiting and retries
+5. **Oracle Evaluation**: Multiple oracles provide different quality assessments
+6. **Statistical Analysis**: Bayesian models quantify confidence and uncertainty
+7. **Results Output**: Rich console output and structured data formats
 
 ### Testing Strategy
 - **Unit Tests**: Individual component testing with pytest
@@ -120,10 +157,23 @@ The project uses a declarative YAML format for evaluation specifications:
 - **Pre-commit**: Automated checks before commits
 
 ### Current Development Status
-The project is in active development (v0.1.0) with the following features in progress:
-- YAML-based evaluation specifications ✅
-- Latin Hypercube Sampling implementation ✅ (on feat/latin-hypercube-sampling branch)
-- Configuration validation and loading ✅
-- CLI interface foundation ✅
-- Oracle evaluation framework (in development)
-- Bayesian analysis integration (planned)
+The project is in active development (v0.1.0) with the following features completed and in progress:
+
+#### ✅ Completed Features
+- **YAML-based evaluation specifications**: Complete configuration system with Pydantic validation
+- **Latin Hypercube Sampling implementation**: Full LHS with optimization strategies and metrics
+- **Configuration validation and loading**: Comprehensive YAML loading with includes, environment variables, and caching
+- **CLI interface foundation**: Complete command-line interface with config validation and templating commands
+- **Adapter system**: Full adapter architecture with OpenAI and Anthropic implementations
+- **Template system**: Jinja2-based prompt generation with custom filters and batch rendering
+- **Comprehensive testing**: 26+ test files with 80%+ coverage requirement
+
+#### 🚧 In Development
+- **Oracle evaluation framework**: Basic structure in place, implementations needed
+- **Bayesian analysis integration**: Framework ready, PyMC integration pending
+
+#### 📁 Project Structure
+- **Core Modules**: All foundational modules implemented and tested
+- **Configuration Schema**: Complete support for adapters, distributions, sampling, and statistical analysis
+- **LLM Integrations**: OpenAI and Anthropic adapters with rate limiting and retry logic
+- **Development Workflow**: Full CI/CD setup with testing, formatting, and security checks

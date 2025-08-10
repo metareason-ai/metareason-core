@@ -1,8 +1,6 @@
 """Test using the complete example from the YAML specification."""
 
-import pytest
-
-from metareason.config import load_yaml_config, validate_yaml_string
+from metareason.config import validate_yaml_string
 
 
 def test_complete_spec_example():

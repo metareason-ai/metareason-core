@@ -7,7 +7,6 @@ import pytest
 import yaml
 
 from metareason.config.includes import (
-    IncludeLoader,
     load_yaml_with_includes,
     merge_configs,
     process_includes_and_inheritance,

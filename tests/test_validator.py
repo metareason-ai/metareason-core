@@ -1,10 +1,8 @@
 """Tests for the validation utilities."""
 
-import tempfile
 from pathlib import Path
 
 import pytest
-import yaml
 
 from metareason.config.validator import (
     ValidationReport,
