@@ -131,13 +131,26 @@ class LatinHypercubeSampler(BaseSampler):
         """
         lhs_optimization = self._map_optimization()
 
-        sampler = qmc.LatinHypercube(
-            d=self.n_dimensions,
-            scramble=self.scramble,
-            strength=self.strength,
-            optimization=lhs_optimization,
-            rng=self.rng,
-        )
+        # Handle scipy version compatibility
+        try:
+            sampler = qmc.LatinHypercube(
+                d=self.n_dimensions,
+                scramble=self.scramble,
+                strength=self.strength,
+                optimization=lhs_optimization,
+                rng=self.rng,
+            )
+        except TypeError:
+            # Older scipy versions may not support rng parameter
+            # Set the global numpy random state as fallback for reproducibility
+            if self.random_seed is not None:
+                np.random.seed(self.random_seed)
+            sampler = qmc.LatinHypercube(
+                d=self.n_dimensions,
+                scramble=self.scramble,
+                strength=self.strength,
+                optimization=lhs_optimization,
+            )
 
         samples = sampler.random(n=batch_size)
 

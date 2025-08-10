@@ -1,13 +1,8 @@
 """Tests for YAML configuration loading and validation."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
-import yaml
 
 from metareason.config import (
-    EvaluationConfig,
     load_yaml_config,
     load_yaml_configs,
     validate_yaml_file,
@@ -220,7 +215,9 @@ schema:
     yaml_file = tmp_path / "missing_fields.yaml"
     yaml_file.write_text(yaml_content)
 
-    with pytest.raises(Exception):  # Should raise validation error
+    with pytest.raises(
+        RuntimeError
+    ):  # Current implementation wraps validation errors in RuntimeError
         load_yaml_config(yaml_file)
 
 

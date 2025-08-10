@@ -1,13 +1,11 @@
 """Tests for CLI utility functions."""
 
-import json
 import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
@@ -23,7 +21,6 @@ from metareason.cli.utils import (
     truncate_text,
 )
 from metareason.config.loader import load_yaml_config
-from metareason.config.models import EvaluationConfig
 from metareason.config.validator import ValidationReport
 
 
@@ -438,7 +435,6 @@ class TestDiscoverConfigDirectories:
         directories = discover_config_directories()
 
         # Should include some POSIX-specific paths if they exist
-        posix_paths = [str(d) for d in directories]
         # We can't guarantee these exist, so just test the function runs
         assert isinstance(directories, list)
 

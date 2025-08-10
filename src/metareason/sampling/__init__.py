@@ -1,6 +1,7 @@
 """Sampling strategies for LLM evaluation."""
 
 from .base import BaseSampler, SampleResult
+from .factory import create_sampler
 from .lhs import LatinHypercubeSampler
 from .metrics import (
     compute_all_metrics,
@@ -35,6 +36,7 @@ from .utils import (
 __all__ = [
     "BaseSampler",
     "SampleResult",
+    "create_sampler",
     "LatinHypercubeSampler",
     "BaseOptimizer",
     "MaximinOptimizer",

@@ -36,6 +36,7 @@ metareason report --latest
 
 - YAML-based evaluation specifications
 - Latin Hypercube Sampling for parameter space exploration
+- Jinja2-based template system with custom filters (see [Templating Guide](docs/templating-guide.md))
 - Embedding similarity oracle (accuracy scoring)
 - LLM-as-judge oracle (explainability scoring)
 - Bayesian confidence intervals via PyMC
@@ -56,6 +57,7 @@ metareason report --latest
 ### 📖 Documentation
 
 - Getting Started Guide - Your first evaluation in 5 minutes
+- [Templating Guide](docs/templating-guide.md) - Jinja2 templates and custom filters
 - YAML Schema Reference - Complete specification format
 - Statistical Methodology - Mathematical foundations
 - Oracle Development - Creating custom evaluation criteria

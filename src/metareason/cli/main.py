@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.traceback import install
 
 from .config import config_group
+from .templates import template_group
 
 # Install rich tracebacks for better error reporting
 install(show_locals=True)
@@ -43,6 +44,7 @@ def cli(ctx: click.Context, verbose: bool, config_dir: Optional[Path]) -> None:
 
 # Register command groups
 cli.add_command(config_group)
+cli.add_command(template_group)
 
 
 @cli.command()

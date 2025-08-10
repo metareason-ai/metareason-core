@@ -6,8 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
 
-from metareason.config.cache import disable_caching, get_global_cache, set_global_cache
+from metareason.config.cache import get_global_cache, set_global_cache
 from metareason.config.environment import EnvironmentSubstitutionError
 from metareason.config.loader import load_yaml_config, load_yaml_configs
 
@@ -274,8 +275,8 @@ oracles:
         try:
             # Should fallback to standard loading (without processing includes)
             with pytest.raises(
-                Exception
-            ):  # Will fail on validation due to broken include
+                yaml.YAMLError
+            ):  # Will fail on YAML parsing due to broken include
                 load_yaml_config(temp_path, enable_includes=True)
         finally:
             temp_path.unlink()

@@ -1,5 +1,19 @@
 """Configuration management for MetaReason."""
 
+from .adapters import (
+    AdapterConfigType,
+    AdaptersConfig,
+    AdapterType,
+    AnthropicConfig,
+    AzureOpenAIConfig,
+    BaseAdapterConfig,
+    CustomAdapterConfig,
+    HuggingFaceConfig,
+    ModelConfig,
+    OpenAIConfig,
+    RateLimitConfig,
+    RetryConfig,
+)
 from .axes import AxisConfig, AxisConfigType, CategoricalAxis, ContinuousAxis
 from .distributions import (
     BetaDistributionConfig,
@@ -28,6 +42,19 @@ __all__ = [
     "EvaluationConfig",
     "DomainContext",
     "Metadata",
+    # Adapters
+    "AdapterType",
+    "BaseAdapterConfig",
+    "AdapterConfigType",
+    "AdaptersConfig",
+    "OpenAIConfig",
+    "AnthropicConfig",
+    "AzureOpenAIConfig",
+    "HuggingFaceConfig",
+    "CustomAdapterConfig",
+    "ModelConfig",
+    "RetryConfig",
+    "RateLimitConfig",
     # Axes
     "AxisConfig",
     "AxisConfigType",
