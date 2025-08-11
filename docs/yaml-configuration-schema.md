@@ -20,12 +20,79 @@ The MetaReason YAML Schema defines a declarative format for specifying Large Lan
 | ----------------- | ------- | -------- | ------------------------------------------------------------------------ |
 | `prompt_id`       | string  | Yes      | Unique identifier for the prompt family. Use lowercase with underscores. |
 | `prompt_template` | string  | Yes      | Jinja2-compatible template with variable placeholders.                   |
+| `primary_model`   | object  | Yes      | Configuration for the model under test.                                 |
 | `schema`          | object  | Yes      | Defines all variable axes for prompt generation.                         |
 | `sampling`        | object  | No       | Configuration for sampling strategy (defaults to Latin Hypercube).       |
 | `n_variants`      | integer | No       | Number of prompt variants to generate (default: 1000).                   |
 | `oracles`         | object  | Yes      | Defines evaluation criteria and scoring methods.                         |
 | `domain_context`  | object  | No       | Industry-specific context and compliance mappings.                       |
 | `metadata`        | object  | No       | Tracking information for governance and audit trails.                    |
+
+### Primary Model Object
+
+The `primary_model` object specifies the LLM model that will be evaluated. This is distinct from judge models used in oracles.
+
+```yaml
+primary_model:
+  adapter: "openai"              # Required: adapter type (openai, anthropic, ollama, etc.)
+  model: "gpt-3.5-turbo"        # Required: specific model name
+  temperature: 0.7              # Optional: sampling temperature (0.0-2.0)
+  max_tokens: 1000              # Optional: maximum output tokens
+  top_p: 0.9                    # Optional: nucleus sampling (0.0-1.0)
+  frequency_penalty: 0.0        # Optional: frequency penalty (-2.0-2.0)
+  presence_penalty: 0.0         # Optional: presence penalty (-2.0-2.0)
+  stop: ["END", "STOP"]         # Optional: stop sequences
+```
+
+**Configuration Options:**
+
+- `adapter` (required): Adapter type matching available providers:
+  - **openai**: OpenAI API (GPT models)
+  - **anthropic**: Anthropic API (Claude models)
+  - **ollama**: Local Ollama server (open-source models)
+  - **google**: Google Gemini API
+  - **custom**: Custom adapter implementation
+
+- `model` (required): Specific model identifier:
+  - **OpenAI**: "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo"
+  - **Anthropic**: "claude-3-opus-20240229", "claude-3-sonnet-20240229"
+  - **Ollama**: "llama3", "mistral", "gemma"
+
+- `temperature` (optional, default: 0.7): Controls randomness in generation
+  - **0.0**: Deterministic, consistent outputs
+  - **0.7**: Balanced creativity and consistency
+  - **1.0+**: More creative, less predictable
+
+- Optional parameters: `max_tokens`, `top_p`, `frequency_penalty`, `presence_penalty`, `stop` sequences follow standard LLM API conventions
+
+**Example Configurations:**
+
+*OpenAI GPT-4:*
+```yaml
+primary_model:
+  adapter: "openai"
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 2000
+```
+
+*Local Ollama Model:*
+```yaml
+primary_model:
+  adapter: "ollama"
+  model: "llama3"
+  temperature: 0.5
+  max_tokens: 1000
+```
+
+*Anthropic Claude:*
+```yaml
+primary_model:
+  adapter: "anthropic"
+  model: "claude-3-sonnet-20240229"
+  temperature: 0.3
+  max_tokens: 1500
+```
 
 ### Schema Object
 
@@ -239,6 +306,13 @@ prompt_template: |
   {{verb}} the implications of ISO 42001 on {{domain}} governance{{persona_clause}},
   focusing on {{focus_area}}{{structure_clause}}.
 
+primary_model:
+  adapter: "openai"
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 2000
+  top_p: 0.9
+
 schema:
   # Categorical axes
   verb:
@@ -390,7 +464,7 @@ statistical_config:
 
 ## Validation Rules
 
-1. **Required Fields**: `prompt_id`, `prompt_template`, `schema`, and `oracles` must be present
+1. **Required Fields**: `prompt_id`, `prompt_template`, `primary_model`, `schema`, and `oracles` must be present
 
 2. **Template Variables**: All `{{variables}}` in prompt_template must exist in schema
 
@@ -406,6 +480,13 @@ statistical_config:
 6. **Sampling Constraints**:
    - n_variants ≥ 100 (for statistical significance)
    - n_variants ≤ 10000 (for computational efficiency)
+
+7. **Primary Model Constraints**:
+   - adapter must be a supported adapter type
+   - model must be non-empty string
+   - temperature must be between 0.0 and 2.0
+   - top_p must be between 0.0 and 1.0
+   - max_tokens must be positive integer
 
 ## Future Extensions (v2.0)
 

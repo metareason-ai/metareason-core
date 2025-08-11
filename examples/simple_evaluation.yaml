@@ -3,6 +3,12 @@ prompt_id: simple_accuracy_test
 prompt_template: |
   {{instruction}} the concept of {{topic}} in {{style}} terms.
 
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
+  temperature: 0.7
+  max_tokens: 1000
+
 schema:
   instruction:
     type: categorical

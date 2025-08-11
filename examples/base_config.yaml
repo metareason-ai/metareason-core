@@ -1,4 +1,10 @@
 # Base configuration with common settings
+primary_model:
+  adapter: ${PRIMARY_ADAPTER:openai}
+  model: ${PRIMARY_MODEL:gpt-3.5-turbo}
+  temperature: ${PRIMARY_TEMPERATURE:0.7}
+  max_tokens: ${PRIMARY_MAX_TOKENS:1000}
+
 sampling:
   method: latin_hypercube
   optimization_criterion: maximin

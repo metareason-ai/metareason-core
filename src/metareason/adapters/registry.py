@@ -15,6 +15,7 @@ from ..config.adapters import (
     AzureOpenAIConfig,
     BaseAdapterConfig,
     CustomAdapterConfig,
+    GoogleConfig,
     HuggingFaceConfig,
     OllamaConfig,
     OpenAIConfig,
@@ -54,6 +55,13 @@ class AdapterRegistry:
             self.register(AdapterType.OLLAMA.value, OllamaAdapter)
         except Exception as e:
             logger.debug(f"Could not register Ollama adapter: {e}")
+
+        try:
+            from .google import GoogleAdapter
+
+            self.register(AdapterType.GOOGLE.value, GoogleAdapter)
+        except Exception as e:
+            logger.debug(f"Could not register Google adapter: {e}")
 
         # Note: Azure and HuggingFace adapters not implemented yet
         # try:
@@ -317,6 +325,13 @@ class AdapterFactory:
 
         elif isinstance(config, AnthropicConfig):
             adapter_config["api_version"] = config.api_version
+
+        elif isinstance(config, GoogleConfig):
+            adapter_config["api_version"] = config.api_version
+            adapter_config["use_vertex_ai"] = config.use_vertex_ai
+            adapter_config["project_id"] = config.project_id
+            adapter_config["location"] = config.location
+            adapter_config["batch_size"] = config.batch_size
 
         elif isinstance(config, AzureOpenAIConfig):
             adapter_config["azure_endpoint"] = config.azure_endpoint

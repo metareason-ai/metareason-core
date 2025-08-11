@@ -117,6 +117,10 @@ class TestRunCommand:
                 """
 prompt_id: test_run
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
+  temperature: 0.7
 n_variants: 100
 axes:
   name:
@@ -150,6 +154,10 @@ sampling:
                 """
 prompt_id: test_dry_run
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
+  temperature: 0.7
 n_variants: 100
 axes:
   name:
@@ -188,6 +196,10 @@ sampling:
                 """
 prompt_id: test_output
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
+  temperature: 0.7
 n_variants: 100
 axes:
   name:
@@ -259,6 +271,10 @@ prompt_template: "Hello {{name}}"
                 """
 prompt_id: test_verbose
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
+  temperature: 0.7
 axes:
   name:
     type: categorical

@@ -12,6 +12,13 @@ prompt_template: |
   {{verb}} the implications of ISO 42001 on {{domain}} governance{{persona_clause}},
   focusing on {{focus_area}}{{structure_clause}}.
 
+primary_model:
+  adapter: "openai"
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 2000
+  top_p: 0.9
+
 schema:
   # Categorical axes
   verb:
@@ -125,6 +132,14 @@ metadata:
     assert config.prompt_id == "iso_42001_compliance_check"
     assert config.n_variants == 2000
 
+    # Test primary model configuration
+    assert config.primary_model is not None
+    assert config.primary_model.adapter == "openai"
+    assert config.primary_model.model == "gpt-4"
+    assert config.primary_model.temperature == 0.7
+    assert config.primary_model.max_tokens == 2000
+    assert config.primary_model.top_p == 0.9
+
     # Test axes
     assert len(config.axes) == 7
     assert config.axes["verb"].type == "categorical"
@@ -182,6 +197,10 @@ def test_statistical_config_from_spec():
     yaml_content = """
 prompt_id: test_statistical
 prompt_template: "Test {{param}}"
+primary_model:
+  adapter: "openai"
+  model: "gpt-3.5-turbo"
+  temperature: 0.5
 schema:
   param:
     type: categorical
@@ -207,6 +226,12 @@ statistical_config:
 """
 
     config = validate_yaml_string(yaml_content)
+
+    # Test primary model in statistical test
+    assert config.primary_model is not None
+    assert config.primary_model.adapter == "openai"
+    assert config.primary_model.model == "gpt-3.5-turbo"
+    assert config.primary_model.temperature == 0.5
 
     assert config.statistical_config is not None
     assert config.statistical_config.model == "beta_binomial"

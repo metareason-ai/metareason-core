@@ -308,19 +308,47 @@ class MockAdapterTestRunner:
             elif adapter_info["name"] == "mock_anthropic":
                 env_patches["ANTHROPIC_API_KEY"] = adapter_info["config"].api_key
 
-            with (
-                patch.dict("os.environ", env_patches),
-                patch("aiohttp.ClientSession.request") as mock_request,
-            ):
-                # Mock successful responses
-                MockAdapterTestRunner._setup_mock_responses(mock_request)
+            # Handle OpenAI and Anthropic differently due to different client libraries
+            if adapter_info["name"] == "mock_openai":
+                with (
+                    patch.dict("os.environ", env_patches),
+                    patch("metareason.adapters.openai.AsyncOpenAI") as mock_client,
+                ):
+                    # Set up OpenAI client mocks
+                    MockAdapterTestRunner._setup_openai_client_mock(mock_client)
+                    test_suite = AdapterTestSuite(
+                        adapter_info["config"], adapter_info["name"]
+                    )
+                    test_results = await test_suite.run_all_tests()
+                    results.append(test_results)
+            elif adapter_info["name"] == "mock_anthropic":
+                with (
+                    patch.dict("os.environ", env_patches),
+                    patch(
+                        "metareason.adapters.anthropic.AsyncAnthropic"
+                    ) as mock_client,
+                ):
+                    # Set up Anthropic client mocks
+                    MockAdapterTestRunner._setup_anthropic_client_mock(mock_client)
+                    test_suite = AdapterTestSuite(
+                        adapter_info["config"], adapter_info["name"]
+                    )
+                    test_results = await test_suite.run_all_tests()
+                    results.append(test_results)
+            else:
+                # Other adapters use aiohttp
+                with (
+                    patch.dict("os.environ", env_patches),
+                    patch("aiohttp.ClientSession.request") as mock_request,
+                ):
+                    # Mock successful responses
+                    MockAdapterTestRunner._setup_mock_responses(mock_request)
 
-                test_suite = AdapterTestSuite(
-                    adapter_info["config"], adapter_info["name"]
-                )
-
-                test_results = await test_suite.run_all_tests()
-                results.append(test_results)
+                    test_suite = AdapterTestSuite(
+                        adapter_info["config"], adapter_info["name"]
+                    )
+                    test_results = await test_suite.run_all_tests()
+                    results.append(test_results)
 
         return results
 
@@ -400,6 +428,120 @@ class MockAdapterTestRunner:
 
         mock_request.side_effect = mock_request_func
 
+    @staticmethod
+    def _setup_openai_client_mock(mock_openai_class):
+        """Set up OpenAI client mocks."""
+        from unittest.mock import AsyncMock, Mock
+
+        from openai.types import Model
+        from openai.types.chat import ChatCompletion, ChatCompletionMessage
+        from openai.types.chat.chat_completion import Choice
+        from openai.types.completion_usage import CompletionUsage
+
+        mock_client = AsyncMock()
+        mock_openai_class.return_value = mock_client
+
+        # Mock chat completion
+        mock_completion = ChatCompletion(
+            id="chatcmpl-test",
+            choices=[
+                Choice(
+                    finish_reason="stop",
+                    index=0,
+                    message=ChatCompletionMessage(
+                        content="Mock response from OpenAI API", role="assistant"
+                    ),
+                )
+            ],
+            created=1234567890,
+            model="gpt-3.5-turbo",
+            object="chat.completion",
+            usage=CompletionUsage(
+                completion_tokens=5, prompt_tokens=10, total_tokens=15
+            ),
+        )
+        mock_client.chat.completions.create.return_value = mock_completion
+
+        # Mock model listing
+        mock_models = Mock()
+        mock_models.data = [
+            Model(
+                id="gpt-3.5-turbo",
+                created=1234567890,
+                object="model",
+                owned_by="openai",
+            ),
+            Model(id="gpt-4", created=1234567890, object="model", owned_by="openai"),
+            Model(
+                id="gpt-4-turbo",
+                created=1234567890,
+                object="model",
+                owned_by="openai",
+            ),
+        ]
+        mock_client.models.list.return_value = mock_models
+
+    @staticmethod
+    def _setup_anthropic_client_mock(mock_anthropic_class):
+        """Set up Anthropic client mocks."""
+        from unittest.mock import AsyncMock, Mock
+
+        mock_client = AsyncMock()
+        mock_anthropic_class.return_value = mock_client
+
+        # Mock message completion response
+        mock_response = Mock()
+        mock_response.content = [Mock(text="Mock response from Anthropic API")]
+        mock_response.model = "claude-3-haiku-20240307"
+        mock_response.stop_reason = "end_turn"
+        mock_response.usage = Mock(input_tokens=10, output_tokens=5)
+        mock_response.id = "msg-test"
+        mock_response.type = "message"
+        mock_response.role = "assistant"
+
+        mock_client.messages.create.return_value = mock_response
+
+        # Mock streaming response
+        class MockStreamChunk:
+            def __init__(
+                self,
+                chunk_type="content_block_delta",
+                text="Mock response from Anthropic API",
+            ):
+                self.type = chunk_type
+                if chunk_type == "content_block_delta":
+                    self.delta = Mock(text=text)
+                    self.index = 0
+
+        class MockStream:
+            def __init__(self):
+                self.chunks = [
+                    MockStreamChunk(
+                        "content_block_delta", "Mock response from Anthropic API"
+                    ),
+                    MockStreamChunk("message_stop", ""),
+                ]
+                self.index = 0
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                if self.index >= len(self.chunks):
+                    raise StopAsyncIteration
+                chunk = self.chunks[self.index]
+                self.index += 1
+                return chunk
+
+        # Mock the stream method to return the MockStream context manager directly
+        mock_client.messages.stream.return_value = MockStream()
+
 
 @pytest.mark.integration
 class TestAdapterIntegration:
@@ -465,18 +607,67 @@ class TestAdapterIntegration:
         # Print summary
         print("\n=== Integration Test Summary ===")
         for result in results:
-            print(
-                f"{result['adapter_name']}: {result.get('basic_completion', {}).get('status', 'unknown')}"
-            )
+            basic_status = result.get("basic_completion", {}).get("status", "unknown")
+            print(f"{result['adapter_name']}: {basic_status}")
 
     @pytest.mark.asyncio
     async def test_openai_adapter_direct(self):
         """Test OpenAI adapter implementation directly with mocks."""
+        from unittest.mock import AsyncMock
+
+        from openai.types import Model
+        from openai.types.chat import ChatCompletion, ChatCompletionMessage
+        from openai.types.chat.chat_completion import Choice
+        from openai.types.completion_usage import CompletionUsage
+
         from metareason.adapters.openai import OpenAIAdapter
 
-        with patch("aiohttp.ClientSession.request") as mock_request:
-            # Set up mock responses
-            self._setup_openai_mock_responses(mock_request)
+        # Mock the OpenAI client in the adapter module
+        with patch("metareason.adapters.openai.AsyncOpenAI") as mock_openai_class:
+            mock_client = AsyncMock()
+            mock_openai_class.return_value = mock_client
+
+            # Mock chat completion
+            mock_completion = ChatCompletion(
+                id="chatcmpl-test",
+                choices=[
+                    Choice(
+                        finish_reason="stop",
+                        index=0,
+                        message=ChatCompletionMessage(
+                            content="Mock response from OpenAI API", role="assistant"
+                        ),
+                    )
+                ],
+                created=1234567890,
+                model="gpt-3.5-turbo",
+                object="chat.completion",
+                usage=CompletionUsage(
+                    completion_tokens=5, prompt_tokens=10, total_tokens=15
+                ),
+            )
+            mock_client.chat.completions.create.return_value = mock_completion
+
+            # Mock model listing
+            mock_models = Mock()
+            mock_models.data = [
+                Model(
+                    id="gpt-3.5-turbo",
+                    created=1234567890,
+                    object="model",
+                    owned_by="openai",
+                ),
+                Model(
+                    id="gpt-4", created=1234567890, object="model", owned_by="openai"
+                ),
+                Model(
+                    id="gpt-4-turbo",
+                    created=1234567890,
+                    object="model",
+                    owned_by="openai",
+                ),
+            ]
+            mock_client.models.list.return_value = mock_models
 
             adapter = OpenAIAdapter(
                 api_key="test-key-openai",
@@ -525,9 +716,12 @@ class TestAdapterIntegration:
         """Test Anthropic adapter implementation directly with mocks."""
         from metareason.adapters.anthropic import AnthropicAdapter
 
-        with patch("aiohttp.ClientSession.request") as mock_request:
-            # Set up mock responses
-            self._setup_anthropic_mock_responses(mock_request)
+        # Mock the Anthropic client in the adapter module
+        with patch(
+            "metareason.adapters.anthropic.AsyncAnthropic"
+        ) as mock_anthropic_class:
+            # Set up Anthropic client mocks
+            MockAdapterTestRunner._setup_anthropic_client_mock(mock_anthropic_class)
 
             adapter = AnthropicAdapter(
                 api_key="test-key-anthropic",

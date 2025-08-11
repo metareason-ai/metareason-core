@@ -12,6 +12,60 @@ from .sampling import SamplingConfig
 from .statistical import StatisticalConfig
 
 
+class PrimaryModelConfig(BaseModel):
+    """Configuration for the primary model under test."""
+
+    adapter: str = Field(
+        ..., description="Adapter type (openai, anthropic, ollama, etc.)"
+    )
+    model: str = Field(..., description="Specific model name")
+    temperature: Optional[float] = Field(
+        default=0.7, ge=0.0, le=2.0, description="Sampling temperature"
+    )
+    max_tokens: Optional[int] = Field(
+        default=None, gt=0, description="Maximum output tokens"
+    )
+    top_p: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0, description="Nucleus sampling parameter"
+    )
+    frequency_penalty: Optional[float] = Field(
+        default=None, ge=-2.0, le=2.0, description="Frequency penalty"
+    )
+    presence_penalty: Optional[float] = Field(
+        default=None, ge=-2.0, le=2.0, description="Presence penalty"
+    )
+    stop: Optional[List[str]] = Field(default=None, description="Stop sequences")
+
+    @field_validator("adapter")
+    @classmethod
+    def validate_adapter_type(cls, v: str) -> str:
+        if not v:
+            raise ValueError("Adapter type cannot be empty")
+
+        supported_adapters = {
+            "openai",
+            "anthropic",
+            "ollama",
+            "google",
+            "azure_openai",
+            "huggingface",
+            "custom",
+        }
+        if v not in supported_adapters:
+            raise ValueError(
+                f"Adapter type '{v}' not supported. "
+                f"Supported types: {sorted(supported_adapters)}"
+            )
+        return v
+
+    @field_validator("model")
+    @classmethod
+    def validate_model_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Model name cannot be empty")
+        return v.strip()
+
+
 class DomainContext(BaseModel):
     """Domain-specific context and compliance information."""
 
@@ -77,6 +131,9 @@ class EvaluationConfig(BaseModel):
 
     prompt_id: str = Field(..., description="Unique identifier for the prompt family")
     prompt_template: str = Field(..., description="Jinja2-compatible template")
+    primary_model: PrimaryModelConfig = Field(
+        ..., description="Primary model under test"
+    )
     axes: Dict[str, AxisConfigType] = Field(
         ..., description="Variable axes configuration"
     )
