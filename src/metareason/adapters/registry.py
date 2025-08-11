@@ -16,6 +16,7 @@ from ..config.adapters import (
     BaseAdapterConfig,
     CustomAdapterConfig,
     HuggingFaceConfig,
+    OllamaConfig,
     OpenAIConfig,
 )
 
@@ -46,6 +47,13 @@ class AdapterRegistry:
             self.register(AdapterType.ANTHROPIC.value, AnthropicAdapter)
         except Exception as e:
             logger.debug(f"Could not register Anthropic adapter: {e}")
+
+        try:
+            from .ollama import OllamaAdapter
+
+            self.register(AdapterType.OLLAMA.value, OllamaAdapter)
+        except Exception as e:
+            logger.debug(f"Could not register Ollama adapter: {e}")
 
         # Note: Azure and HuggingFace adapters not implemented yet
         # try:
@@ -245,6 +253,10 @@ class AdapterFactory:
             # Import LLMAdapter here to avoid circular imports
             from .base import LLMAdapter
 
+            # Check if it's actually a class and if it inherits from LLMAdapter
+            if not isinstance(adapter_class, type):
+                raise TypeError(f"{adapter_class} is not a class")
+
             if not issubclass(adapter_class, LLMAdapter):
                 raise TypeError(f"{adapter_class} must inherit from LLMAdapter")
 
@@ -316,6 +328,10 @@ class AdapterFactory:
             adapter_config["inference_endpoint"] = config.inference_endpoint
             adapter_config["use_inference_api"] = config.use_inference_api
             adapter_config["device"] = config.device
+
+        elif isinstance(config, OllamaConfig):
+            adapter_config["pull_missing_models"] = config.pull_missing_models
+            adapter_config["model_timeout"] = config.model_timeout
 
         return adapter_config
 

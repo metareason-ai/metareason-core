@@ -74,9 +74,13 @@ graph TD
 - **Purpose**: Oracle evaluation and scoring
 - **Dependencies**: Adapters, Configuration
 - **Key Components**:
-  - Oracle interfaces
-  - Evaluation metrics
-  - Score aggregators
+  - Oracle interfaces (BaseOracle)
+  - LLM-as-Judge oracle with rubric-based evaluation
+  - Embedding similarity oracle for accuracy assessment
+  - Statistical calibration oracle for confidence evaluation
+  - Custom oracle support for domain-specific criteria
+  - Robust JSON parsing and fallback mechanisms
+  - Multi-judge rotation for bias reduction
 
 ### 6. Adapters Module (`metareason.adapters`)
 - **Purpose**: External service integrations

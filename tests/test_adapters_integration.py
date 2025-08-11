@@ -663,11 +663,38 @@ class TestAdapterIntegration:
 
         # Test custom adapter creation
         with patch("importlib.import_module") as mock_import:
-            mock_adapter_instance = Mock()
-            mock_custom_class = Mock(return_value=mock_adapter_instance)
+            from metareason.adapters.base import LLMAdapter
+
+            # Create a proper mock adapter class that inherits from LLMAdapter
+            class MockCustomAdapter(LLMAdapter):
+                def __init__(self, config=None, **kwargs):
+                    super().__init__(config)
+                    self.test_config = config
+
+                async def _initialize(self):
+                    pass
+
+                async def _cleanup(self):
+                    pass
+
+                async def complete(self, request):
+                    from metareason.adapters.base import CompletionResponse
+
+                    return CompletionResponse(content="test", model="test")
+
+                async def complete_stream(self, request):
+                    from metareason.adapters.base import StreamChunk
+
+                    yield StreamChunk(content="test")
+
+                async def list_models(self):
+                    return ["test-model"]
+
+                async def validate_model(self, model):
+                    return True
 
             mock_module = Mock()
-            mock_module.CustomTestAdapter = mock_custom_class
+            mock_module.CustomTestAdapter = MockCustomAdapter
             mock_import.return_value = mock_module
 
             custom_config = CustomAdapterConfig(
@@ -676,11 +703,11 @@ class TestAdapterIntegration:
                 custom_params={"param1": "value1"},
             )
 
-            with patch("builtins.issubclass", return_value=True):
-                result = AdapterFactory.create(custom_config)
+            result = AdapterFactory.create(custom_config)
 
-            assert result == mock_adapter_instance
-            mock_custom_class.assert_called_once()
+            assert isinstance(result, MockCustomAdapter)
+            assert result.test_config["api_key"] == "test-custom-key"
+            assert result.test_config["param1"] == "value1"
 
     def _setup_openai_mock_responses(self, mock_request):
         """Set up OpenAI-specific mock responses."""

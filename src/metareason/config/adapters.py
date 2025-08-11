@@ -13,6 +13,7 @@ class AdapterType(str, Enum):
     ANTHROPIC = "anthropic"
     AZURE_OPENAI = "azure_openai"
     HUGGINGFACE = "huggingface"
+    OLLAMA = "ollama"
     CUSTOM = "custom"
 
 
@@ -136,7 +137,11 @@ class BaseAdapterConfig(BaseModel):
         """Ensure API key is provided either directly or via environment."""
         if not self.api_key and not self.api_key_env:
             # Some adapters might not require API keys
-            if self.type not in [AdapterType.CUSTOM, AdapterType.HUGGINGFACE]:
+            if self.type not in [
+                AdapterType.CUSTOM,
+                AdapterType.HUGGINGFACE,
+                AdapterType.OLLAMA,
+            ]:
                 raise ValueError(
                     f"Either 'api_key' or 'api_key_env' must be provided for {self.type}"
                 )
@@ -202,6 +207,22 @@ class HuggingFaceConfig(BaseAdapterConfig):
     )
 
 
+class OllamaConfig(BaseAdapterConfig):
+    """Configuration for Ollama adapter."""
+
+    type: Literal[AdapterType.OLLAMA] = AdapterType.OLLAMA
+    base_url: str = Field(
+        default="http://localhost:11434", description="Ollama server URL"
+    )
+    default_model: str = Field(default="llama3", description="Default model")
+    pull_missing_models: bool = Field(
+        default=False, description="Automatically pull models if not available"
+    )
+    model_timeout: float = Field(
+        default=120.0, gt=0, description="Model inference timeout in seconds"
+    )
+
+
 class CustomAdapterConfig(BaseAdapterConfig):
     """Configuration for custom adapters."""
 
@@ -220,6 +241,7 @@ AdapterConfigType = Union[
     AnthropicConfig,
     AzureOpenAIConfig,
     HuggingFaceConfig,
+    OllamaConfig,
     CustomAdapterConfig,
 ]
 

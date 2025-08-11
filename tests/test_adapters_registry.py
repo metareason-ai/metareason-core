@@ -201,28 +201,27 @@ class TestAdapterFactory:
             custom_params={"param1": "value1"},
         )
 
-        # Mock custom adapter class - use a proper mock that can be instantiated
+        # Create a mock adapter class that actually inherits from MockAdapter
         mock_adapter_instance = Mock()
-        mock_custom_class = Mock(return_value=mock_adapter_instance)
+
+        class MockCustomAdapter(MockAdapter):
+            def __init__(self, config=None, **kwargs):
+                super().__init__(config)
+                self.config = config
+                # Store the instance for verification
+                mock_adapter_instance.config = config
 
         # Mock module
         mock_module = Mock()
-        mock_module.CustomAdapter = mock_custom_class
+        mock_module.CustomAdapter = MockCustomAdapter
         mock_import.return_value = mock_module
 
-        # Mock issubclass to return True
-        with patch("builtins.issubclass", return_value=True):
-            result = AdapterFactory.create(config)
+        result = AdapterFactory.create(config)
 
-        # Check that custom adapter was called with config
-        mock_custom_class.assert_called_once()
-        call_args = mock_custom_class.call_args
-        adapter_config = call_args.kwargs["config"]
-        assert adapter_config["api_key"] == "test-key"
-        assert adapter_config["param1"] == "value1"
-
-        # Check that we got the expected instance back
-        assert result == mock_adapter_instance
+        # Verify the result
+        assert isinstance(result, MockCustomAdapter)
+        assert result.config["api_key"] == "test-key"
+        assert result.config["param1"] == "value1"
 
     def test_create_adapter_not_found(self):
         """Test creating adapter when type not found."""

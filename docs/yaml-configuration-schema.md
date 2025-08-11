@@ -94,19 +94,92 @@ oracles:
     embedding_model: "text-embedding-3-small"  # Optional: specify embedding model
 ```
 
-#### Explainability Oracle
+#### LLM-as-Judge Oracle
+
+The LLM-as-judge oracle uses a language model to evaluate responses according to a specific rubric. This is particularly useful for subjective evaluations like explainability, helpfulness, or domain-specific quality criteria.
+
 ```yaml
 oracles:
   explainability:
     type: "llm_judge"
     rubric: |
-      1. Directly answers the question
-      2. Provides clear reasoning
-      3. Avoids unnecessary complexity
-    judge_model: "gpt-4"
-    temperature: 0.0  # For consistent judging
-    output_format: "binary"  # Options: binary, score, structured
+      Rate the response on the following criteria:
+      1. Directly answers the question asked
+      2. Provides clear, step-by-step reasoning
+      3. Uses appropriate domain terminology
+      4. Avoids unnecessary complexity or jargon
+      5. Addresses potential edge cases or limitations
+
+      Score each criterion as Yes (1) or No (0), then provide an overall assessment.
+    judge_model: "gpt-4"  # Options: gpt-4, gpt-3.5-turbo, claude-3-opus, llama3, etc.
+    temperature: 0.0  # Use 0.0 for consistent judging, higher for creative evaluation
+    output_format: "structured"  # Options: binary, score, structured
 ```
+
+**Configuration Options:**
+
+- `rubric` (required): Detailed evaluation criteria. Should include:
+  - Specific, measurable criteria
+  - Clear scoring instructions
+  - Examples of good/bad responses (optional)
+  - Domain-specific requirements
+
+- `judge_model` (default: "gpt-4"): LLM model used as judge. Consider:
+  - **gpt-4**: Best for complex, nuanced evaluation
+  - **gpt-3.5-turbo**: Cost-effective for simpler criteria
+  - **claude-3-opus**: Alternative high-quality judge
+  - **llama3**: For local/private deployments
+
+- `temperature` (default: 0.0): Controls judge consistency
+  - **0.0**: Maximum consistency, recommended for most use cases
+  - **0.1-0.3**: Slight variation while maintaining reliability
+  - **Higher values**: Use cautiously, may reduce judgment reliability
+
+- `output_format`: Response format expected from judge
+  - **binary**: Simple pass/fail (1/0)
+  - **score**: Numerical score (0-10 scale)
+  - **structured**: Detailed JSON with reasoning and scores
+
+**Output Format Examples:**
+
+*Binary Format:*
+```json
+{
+  "score": 1,
+  "reasoning": "Response directly answers the question with clear reasoning."
+}
+```
+
+*Score Format:*
+```json
+{
+  "score": 8,
+  "reasoning": "Strong response with minor clarity issues in technical explanation."
+}
+```
+
+*Structured Format:*
+```json
+{
+  "score": 0.8,
+  "reasoning": "Comprehensive answer with good reasoning but could improve domain terminology.",
+  "criteria_scores": {
+    "directly_answers": 1,
+    "clear_reasoning": 1,
+    "domain_terminology": 0,
+    "appropriate_complexity": 1,
+    "addresses_limitations": 1
+  }
+}
+```
+
+**Best Practices:**
+
+1. **Rubric Design**: Make criteria specific and measurable
+2. **Judge Selection**: Use high-quality models for complex evaluations
+3. **Temperature**: Keep low (0.0-0.1) for consistency
+4. **Bias Mitigation**: Consider multiple judges for critical evaluations
+5. **Cost Management**: Balance judge quality with evaluation budget
 
 #### Confidence Calibration Oracle
 ```yaml
