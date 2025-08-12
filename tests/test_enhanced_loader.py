@@ -11,6 +11,29 @@ import yaml
 from metareason.config.cache import get_global_cache, set_global_cache
 from metareason.config.environment import EnvironmentSubstitutionError
 from metareason.config.loader import load_yaml_config, load_yaml_configs
+from tests.fixtures.config_builders import ConfigBuilder
+
+
+def create_valid_test_config(spec_id: str = "test_config") -> str:
+    """Create a valid test configuration YAML string using ConfigBuilder."""
+    config_builder = ConfigBuilder()
+    config = (
+        config_builder.spec_id(spec_id)
+        .single_step(
+            template="Hello {{name}}",
+            adapter="openai",
+            model="gpt-3.5-turbo",
+            name=["Alice", "Bob"],
+        )
+        .with_oracle(
+            "accuracy",
+            lambda o: o.embedding_similarity(
+                "This is a comprehensive test answer for validation", threshold=0.8
+            ),
+        )
+        .to_yaml()
+    )
+    return config
 
 
 class TestEnhancedLoader:
@@ -23,24 +46,7 @@ class TestEnhancedLoader:
     def test_load_yaml_config_with_caching(self):
         """Test configuration loading with caching enabled."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(
-                """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
+            f.write(create_valid_test_config("test_config"))
             temp_path = Path(f.name)
 
         try:
@@ -51,7 +57,7 @@ oracles:
 
             # Second load - should use cache
             config2 = load_yaml_config(temp_path, use_cache=True)
-            assert config1.prompt_id == config2.prompt_id
+            assert config1.spec_id == config2.spec_id
             assert cache.size() == 1  # Still only one entry
         finally:
             temp_path.unlink()
@@ -59,24 +65,7 @@ oracles:
     def test_load_yaml_config_without_caching(self):
         """Test configuration loading with caching disabled."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(
-                """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
+            f.write(create_valid_test_config("test_config"))
             temp_path = Path(f.name)
 
         try:
@@ -84,7 +73,7 @@ oracles:
             config = load_yaml_config(temp_path, use_cache=False)
             cache = get_global_cache()
             assert cache.size() == 0  # Should not be cached
-            assert config.prompt_id == "test_config"
+            assert config.spec_id == "test_config"
         finally:
             temp_path.unlink()
 
@@ -104,26 +93,26 @@ accuracy:
 """
             )
 
-            # Create main file with include
+            # Create main file with include using proper pipeline format
             main_file = temp_path / "main.yaml"
             main_file.write_text(
                 f"""
-prompt_id: test_with_includes
-prompt_template: "Hello {{{{name}}}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_with_includes
+pipeline:
+  - template: "Hello {{{{name}}}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles: !include {included_file.name}
 """
             )
 
             config = load_yaml_config(main_file, enable_includes=True)
 
-            assert config.prompt_id == "test_with_includes"
+            assert config.spec_id == "test_with_includes"
             assert config.oracles.accuracy.threshold == 0.85
             assert "shared oracle" in config.oracles.accuracy.canonical_answer
 
@@ -132,15 +121,15 @@ oracles: !include {included_file.name}
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: ${PROMPT_ID}
-prompt_template: "Hello ${NAME:World}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["${USER1}", "${USER2}"]
+spec_id: ${PROMPT_ID}
+pipeline:
+  - template: "Hello ${NAME:World}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["${USER1}", "${USER2}"]
 n_variants: ${VARIANTS:1000}
 oracles:
   accuracy:
@@ -163,9 +152,9 @@ oracles:
             ):
                 config = load_yaml_config(temp_path, enable_env_substitution=True)
 
-                assert config.prompt_id == "env_test"
-                assert config.prompt_template == "Hello World"  # Default used
-                assert config.axes["name"].values == ["Alice", "Bob"]
+                assert config.spec_id == "env_test"
+                assert config.pipeline[0].template == "Hello World"  # Default used
+                assert config.pipeline[0].axes["name"].values == ["Alice", "Bob"]
                 assert config.n_variants == 500
                 assert config.oracles.accuracy.threshold == 0.8  # Default used
         finally:
@@ -176,12 +165,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_strict
-prompt_template: "Missing: ${MISSING_VAR}"
-axes:
-  name:
-    type: categorical
-    values: ["Alice"]
+spec_id: test_strict
+pipeline:
+  - template: "Missing: ${MISSING_VAR}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -208,29 +200,12 @@ oracles:
 
             # Create config in subdirectory
             config_file = config_dir / "test.yaml"
-            config_file.write_text(
-                """
-prompt_id: search_path_test
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
+            config_file.write_text(create_valid_test_config("search_path_test"))
 
             # Load using search paths
             config = load_yaml_config("test.yaml", search_paths=[str(config_dir)])
 
-            assert config.prompt_id == "search_path_test"
+            assert config.spec_id == "search_path_test"
 
     def test_load_yaml_config_invalid_extension(self):
         """Test loading file with invalid extension."""
@@ -271,15 +246,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: fallback_test
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: fallback_test
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 broken_include: !include nonexistent.yaml
 oracles:
   accuracy:
@@ -304,7 +279,7 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test
+spec_id: test
 invalid_yaml: [
 missing_closing_bracket: true
 """
@@ -328,44 +303,10 @@ missing_closing_bracket: true
 
             # Create multiple config files
             config1 = temp_path / "config1.yaml"
-            config1.write_text(
-                """
-prompt_id: config1
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
+            config1.write_text(create_valid_test_config("config1"))
 
             config2 = temp_path / "config2.yml"
-            config2.write_text(
-                """
-prompt_id: config2
-prompt_template: "Hi {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.7
-"""
-            )
+            config2.write_text(create_valid_test_config("config2"))
 
             # Load all configs
             configs = load_yaml_configs(temp_path)
@@ -373,8 +314,8 @@ oracles:
             assert len(configs) == 2
             assert "config1" in configs
             assert "config2" in configs
-            assert configs["config1"].prompt_id == "config1"
-            assert configs["config2"].prompt_id == "config2"
+            assert configs["config1"].spec_id == "config1"
+            assert configs["config2"].spec_id == "config2"
 
     def test_load_yaml_configs_with_errors(self):
         """Test loading configs when some have errors."""
@@ -383,38 +324,13 @@ oracles:
 
             # Create valid config
             valid_config = temp_path / "valid.yaml"
-            valid_config.write_text(
-                """
-prompt_id: valid_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
+            valid_config.write_text(create_valid_test_config("valid_config"))
 
-            # Create invalid config
+            # Create invalid config (missing required pipeline field)
             invalid_config = temp_path / "invalid.yaml"
             invalid_config.write_text(
                 """
-prompt_id: ""  # Invalid empty prompt_id
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice"]
+spec_id: ""  # Invalid empty spec_id
 oracles:
   accuracy:
     type: embedding_similarity
@@ -436,30 +352,13 @@ class TestPathResolution:
     def test_absolute_path_resolution(self):
         """Test resolution of absolute paths."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(
-                """
-prompt_id: absolute_path
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
+            f.write(create_valid_test_config("absolute_path"))
             temp_path = Path(f.name)
 
         try:
             # Use absolute path
             config = load_yaml_config(temp_path.absolute())
-            assert config.prompt_id == "absolute_path"
+            assert config.spec_id == "absolute_path"
         finally:
             temp_path.unlink()
 
@@ -475,28 +374,11 @@ oracles:
 
                 # Create config file
                 config_file = temp_path / "relative.yaml"
-                config_file.write_text(
-                    """
-prompt_id: relative_path
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-                )
+                config_file.write_text(create_valid_test_config("relative_path"))
 
                 # Load using relative path
                 config = load_yaml_config("relative.yaml")
-                assert config.prompt_id == "relative_path"
+                assert config.spec_id == "relative_path"
             finally:
                 os.chdir(original_cwd)
 
@@ -509,52 +391,18 @@ oracles:
             search1 = temp_path / "search1"
             search1.mkdir()
             config1 = search1 / "test.yaml"
-            config1.write_text(
-                """
-prompt_id: from_search1
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
+            config1.write_text(create_valid_test_config("from_search1"))
 
             search2 = temp_path / "search2"
             search2.mkdir()
             config2 = search2 / "test.yaml"
-            config2.write_text(
-                """
-prompt_id: from_search2
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
+            config2.write_text(create_valid_test_config("from_search2"))
 
             # Should find first one in search path order
             config = load_yaml_config(
                 "test.yaml", search_paths=[str(search1), str(search2)]
             )
-            assert config.prompt_id == "from_search1"
+            assert config.spec_id == "from_search1"
 
     def test_file_not_found_in_search_paths(self):
         """Test file not found in any search paths."""

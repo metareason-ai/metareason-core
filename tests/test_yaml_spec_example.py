@@ -7,60 +7,58 @@ def test_complete_spec_example():
     """Test the complete example from yaml-configuration-schema.md."""
     yaml_content = """
 # iso_compliance_evaluation.yaml
-prompt_id: "iso_42001_compliance_check"
-prompt_template: |
-  {{verb}} the implications of ISO 42001 on {{domain}} governance{{persona_clause}},
-  focusing on {{focus_area}}{{structure_clause}}.
+spec_id: "iso_42001_compliance_check"
+pipeline:
+  - template: |
+      {{verb}} the implications of ISO 42001 on {{domain}} governance{{persona_clause}},
+      focusing on {{focus_area}}{{structure_clause}}.
+    adapter: "openai"
+    model: "gpt-4"
+    temperature: 0.7
+    max_tokens: 2000
+    top_p: 0.9
+    axes:
+      # Categorical axes
+      verb:
+        type: categorical
+        values: ["analyze", "evaluate", "assess", "review"]
+        weights: [0.3, 0.3, 0.2, 0.2]
 
-primary_model:
-  adapter: "openai"
-  model: "gpt-4"
-  temperature: 0.7
-  max_tokens: 2000
-  top_p: 0.9
+      domain:
+        type: categorical
+        values: ["AI model", "data", "algorithm", "ML pipeline"]
 
-schema:
-  # Categorical axes
-  verb:
-    type: categorical
-    values: ["analyze", "evaluate", "assess", "review"]
-    weights: [0.3, 0.3, 0.2, 0.2]
+      persona_clause:
+        type: categorical
+        values:
+          - " from a compliance officer perspective"
+          - " from a technical implementation view"
+          - " for executive stakeholders"
+          - ""
 
-  domain:
-    type: categorical
-    values: ["AI model", "data", "algorithm", "ML pipeline"]
+      focus_area:
+        type: categorical
+        values: ["risk assessment", "documentation requirements", "audit procedures"]
 
-  persona_clause:
-    type: categorical
-    values:
-      - " from a compliance officer perspective"
-      - " from a technical implementation view"
-      - " for executive stakeholders"
-      - ""
+      structure_clause:
+        type: categorical
+        values:
+          - ""
+          - ". Provide a structured list"
+          - ". Include specific examples"
 
-  focus_area:
-    type: categorical
-    values: ["risk assessment", "documentation requirements", "audit procedures"]
+      # Continuous axes
+      temperature:
+        type: truncated_normal
+        mu: 0.7
+        sigma: 0.15
+        min: 0.3
+        max: 0.95
 
-  structure_clause:
-    type: categorical
-    values:
-      - ""
-      - ". Provide a structured list"
-      - ". Include specific examples"
-
-  # Continuous axes
-  temperature:
-    type: truncated_normal
-    mu: 0.7
-    sigma: 0.15
-    min: 0.3
-    max: 0.95
-
-  top_p:
-    type: beta
-    alpha: 9.0
-    beta: 1.0  # Skewed towards higher values
+      top_p:
+        type: beta
+        alpha: 9.0
+        beta: 1.0  # Skewed towards higher values
 
 sampling:
   method: "latin_hypercube"
@@ -129,30 +127,31 @@ metadata:
     config = validate_yaml_string(yaml_content)
 
     # Test main fields
-    assert config.prompt_id == "iso_42001_compliance_check"
+    assert config.spec_id == "iso_42001_compliance_check"
     assert config.n_variants == 2000
 
-    # Test primary model configuration
-    assert config.primary_model is not None
-    assert config.primary_model.adapter == "openai"
-    assert config.primary_model.model == "gpt-4"
-    assert config.primary_model.temperature == 0.7
-    assert config.primary_model.max_tokens == 2000
-    assert config.primary_model.top_p == 0.9
+    # Test pipeline configuration
+    assert len(config.pipeline) == 1
+    step = config.pipeline[0]
+    assert step.adapter == "openai"
+    assert step.model == "gpt-4"
+    assert step.temperature == 0.7
+    assert step.max_tokens == 2000
+    assert step.top_p == 0.9
 
     # Test axes
-    assert len(config.axes) == 7
-    assert config.axes["verb"].type == "categorical"
-    assert config.axes["verb"].values == ["analyze", "evaluate", "assess", "review"]
-    assert config.axes["verb"].weights == [0.3, 0.3, 0.2, 0.2]
+    assert len(step.axes) == 7
+    assert step.axes["verb"].type == "categorical"
+    assert step.axes["verb"].values == ["analyze", "evaluate", "assess", "review"]
+    assert step.axes["verb"].weights == [0.3, 0.3, 0.2, 0.2]
 
-    assert config.axes["temperature"].type == "truncated_normal"
-    assert config.axes["temperature"].mu == 0.7
-    assert config.axes["temperature"].sigma == 0.15
+    assert step.axes["temperature"].type == "truncated_normal"
+    assert step.axes["temperature"].mu == 0.7
+    assert step.axes["temperature"].sigma == 0.15
 
-    assert config.axes["top_p"].type == "beta"
-    assert config.axes["top_p"].alpha == 9.0
-    assert config.axes["top_p"].beta == 1.0
+    assert step.axes["top_p"].type == "beta"
+    assert step.axes["top_p"].alpha == 9.0
+    assert step.axes["top_p"].beta == 1.0
 
     # Test sampling
     assert config.sampling.method == "latin_hypercube"
@@ -195,16 +194,16 @@ metadata:
 def test_statistical_config_from_spec():
     """Test the statistical configuration example from the spec."""
     yaml_content = """
-prompt_id: test_statistical
-prompt_template: "Test {{param}}"
-primary_model:
-  adapter: "openai"
-  model: "gpt-3.5-turbo"
-  temperature: 0.5
-schema:
-  param:
-    type: categorical
-    values: ["a", "b", "c"]
+spec_id: test_statistical
+pipeline:
+  - template: "Test {{param}}"
+    adapter: "openai"
+    model: "gpt-3.5-turbo"
+    temperature: 0.5
+    axes:
+      param:
+        type: categorical
+        values: ["a", "b", "c"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -227,11 +226,12 @@ statistical_config:
 
     config = validate_yaml_string(yaml_content)
 
-    # Test primary model in statistical test
-    assert config.primary_model is not None
-    assert config.primary_model.adapter == "openai"
-    assert config.primary_model.model == "gpt-3.5-turbo"
-    assert config.primary_model.temperature == 0.5
+    # Test pipeline in statistical test
+    assert len(config.pipeline) == 1
+    step = config.pipeline[0]
+    assert step.adapter == "openai"
+    assert step.model == "gpt-3.5-turbo"
+    assert step.temperature == 0.5
 
     assert config.statistical_config is not None
     assert config.statistical_config.model == "beta_binomial"

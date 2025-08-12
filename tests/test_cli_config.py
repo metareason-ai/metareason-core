@@ -21,9 +21,11 @@ class TestConfigValidateCommand:
         """Test validating a single valid configuration file."""
         config = (
             ConfigBuilder()
-            .test_id("test_config")
-            .prompt_template("Hello {{name}}, this is a test template")
-            .with_axis("name", lambda a: a.categorical(["Alice", "Bob", "Charlie"]))
+            .spec_id("test_config")
+            .single_step(
+                template="Hello {{name}}, this is a test template",
+                name=["Alice", "Bob", "Charlie"],
+            )
             .with_oracle(
                 "accuracy",
                 lambda o: o.embedding_similarity(
@@ -63,7 +65,7 @@ class TestConfigValidateCommand:
             temp_path = Path(temp_dir)
 
             # Create valid config
-            valid_config = EvaluationFactory.minimal(prompt_id="valid_config")
+            valid_config = EvaluationFactory.minimal(spec_id="valid_config")
             valid_path = YamlFileFactory.create_temp_file(valid_config, suffix=".yaml")
             (temp_path / "valid.yaml").write_text(valid_path.read_text())
             valid_path.unlink()  # Clean up original temp file
@@ -84,15 +86,15 @@ class TestConfigValidateCommand:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_config
-prompt_template: "Hello {{name}}, this is a test template"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_config
+pipeline:
+  - template: "Hello {{name}}, this is a test template"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -122,10 +124,14 @@ oracles:
         # Create config with unused axis to trigger warnings/errors
         config = (
             ConfigBuilder()
-            .test_id("test_config")
-            .prompt_template("Hello {{name}}, this is a test template")
-            .with_axis("name", lambda a: a.categorical(["Alice", "Bob"]))
-            .with_axis("unused_axis", lambda a: a.categorical(["X", "Y"]))
+            .spec_id("test_config")
+            .add_pipeline_step(
+                template="Hello {{name}}, this is a test template",
+                axes={
+                    "name": {"type": "categorical", "values": ["Alice", "Bob"]},
+                    "unused_axis": {"type": "categorical", "values": ["X", "Y"]},
+                },
+            )
             .with_oracle(
                 "accuracy",
                 lambda o: o.embedding_similarity(
@@ -182,15 +188,15 @@ oracles:
             ) as f:
                 f.write(
                     """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_config
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -221,15 +227,15 @@ oracles:
             ) as f:
                 f.write(
                     """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_config
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -267,15 +273,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_config
-prompt_template: "Hello {{name}}, this is a test template"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_config
+pipeline:
+  - template: "Hello {{name}}, this is a test template"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -325,15 +331,15 @@ class TestConfigShowCommand:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_config
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -358,15 +364,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_config
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -385,7 +391,7 @@ oracles:
             assert result.exit_code == 0
 
             # Should contain JSON-like structure
-            assert '"prompt_id"' in result.output or "prompt_id" in result.output
+            assert '"spec_id"' in result.output or "spec_id" in result.output
         finally:
             temp_path.unlink()
 
@@ -406,15 +412,15 @@ shared_value: "from included file"
             main_file = temp_path / "main.yaml"
             main_file.write_text(
                 f"""
-prompt_id: test_with_includes
-prompt_template: "Hello {{{{name}}}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_with_includes
+pipeline:
+  - template: "Hello {{{{name}}}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 shared: !include {included_file.name}
 oracles:
   accuracy:
@@ -437,15 +443,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: ${TEST_PROMPT_ID:default_id}
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["${USER1:Alice}", "${USER2:Bob}"]
+spec_id: ${TEST_PROMPT_ID:default_id}
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["${USER1:Alice}", "${USER2:Bob}"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -483,15 +489,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_config
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -527,15 +533,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_config
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -576,15 +582,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_config
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -632,15 +638,15 @@ class TestConfigDiffCommand:
     def test_diff_identical_files(self):
         """Test diffing identical configuration files."""
         config_content = """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_config
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -673,16 +679,16 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
             f1.write(
                 """
-prompt_id: config1
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
+spec_id: config1
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 n_variants: 1000
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -695,16 +701,16 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f2:
             f2.write(
                 """
-prompt_id: config2
-prompt_template: "Hi {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
+spec_id: config2
+pipeline:
+  - template: "Hi {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob", "Charlie"]
 n_variants: 2000
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob", "Charlie"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -731,13 +737,16 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
             f1.write(
                 """
-prompt_id: config1
-prompt_template: "Hello {{name}}"
+spec_id: config1
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 n_variants: 1000
-schema:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -752,16 +761,16 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f2:
             f2.write(
                 """
-prompt_id: config2
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
+spec_id: config2
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 n_variants: 2000
-schema:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -796,16 +805,16 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
             f1.write(
                 """
-prompt_id: same_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
+spec_id: same_config
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 n_variants: 1000
-schema:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -822,16 +831,16 @@ metadata:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f2:
             f2.write(
                 """
-prompt_id: same_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
+spec_id: same_config
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 n_variants: 1000
-schema:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -869,15 +878,15 @@ metadata:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
             f1.write(
                 """
-prompt_id: config1
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: config1
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -909,15 +918,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
             f1.write(
                 """
-prompt_id: config1
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: config1
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -954,16 +963,16 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
             f1.write(
                 """
-prompt_id: config1
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
+spec_id: config1
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 n_variants: 1000
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -976,16 +985,16 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f2:
             f2.write(
                 """
-prompt_id: config2
-prompt_template: "Hi {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
+spec_id: config2
+pipeline:
+  - template: "Hi {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob", "Charlie"]
 n_variants: 2000
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob", "Charlie"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -1016,15 +1025,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
             f1.write(
                 """
-prompt_id: config1
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: config1
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -1037,15 +1046,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f2:
             f2.write(
                 """
-prompt_id: config2
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: config2
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -1224,15 +1233,15 @@ class TestConfigCommandIntegration:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: integration_test
-prompt_template: "Hello {{name}}, this is a test template"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: integration_test
+pipeline:
+  - template: "Hello {{name}}, this is a test template"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -1261,15 +1270,15 @@ oracles:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: cache_test
-prompt_template: "Hello {{name}}, this is a test template"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: cache_test
+pipeline:
+  - template: "Hello {{name}}, this is a test template"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity

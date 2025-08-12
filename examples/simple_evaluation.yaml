@@ -1,35 +1,24 @@
 # Simple MetaReason evaluation configuration example
-prompt_id: simple_accuracy_test
-prompt_template: |
-  {{instruction}} the concept of {{topic}} in {{style}} terms.
-
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-  temperature: 0.7
-  max_tokens: 1000
-  json_schema: "schemas/basic_response.json"
-
-schema:
-  instruction:
-    type: categorical
-    values: ["Explain", "Describe", "Analyze"]
-    weights: [0.4, 0.4, 0.2]
-
-  topic:
-    type: categorical
-    values: ["machine learning", "neural networks", "deep learning"]
-
-  style:
-    type: categorical
-    values: ["technical", "simple", "academic"]
-
-  temperature:
-    type: truncated_normal
-    mu: 0.7
-    sigma: 0.1
-    min: 0.3
-    max: 0.9
+spec_id: simple_accuracy_test
+pipeline:
+  - template: |
+      {{instruction}} the concept of {{topic}} in {{style}} terms.
+    adapter: openai
+    model: gpt-3.5-turbo
+    temperature: 0.7
+    max_tokens: 1000
+    json_schema: "schemas/basic_response.json"
+    axes:
+      instruction:
+        type: categorical
+        values: ["Explain", "Describe", "Analyze"]
+        weights: [0.4, 0.4, 0.2]
+      topic:
+        type: categorical
+        values: ["machine learning", "neural networks", "deep learning"]
+      style:
+        type: categorical
+        values: ["technical", "simple", "academic"]
 
 sampling:
   method: latin_hypercube

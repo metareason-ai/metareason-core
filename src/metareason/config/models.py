@@ -2,7 +2,7 @@
 
 import re
 from datetime import date
-from typing import Any, Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -12,9 +12,13 @@ from .sampling import SamplingConfig
 from .statistical import StatisticalConfig
 
 
-class PrimaryModelConfig(BaseModel):
-    """Configuration for the primary model under test."""
+class PipelineStep(BaseModel):
+    """Self-contained pipeline step with template, model config, and axes."""
 
+    # Template for this stage
+    template: str = Field(..., description="Jinja2 template for this stage")
+
+    # Model configuration
     adapter: str = Field(
         ..., description="Adapter type (openai, anthropic, ollama, etc.)"
     )
@@ -38,6 +42,11 @@ class PrimaryModelConfig(BaseModel):
     json_schema: Optional[str] = Field(
         default=None,
         description="Relative path to JSON schema file for structured output",
+    )
+
+    # Stage-specific axes
+    axes: Dict[str, AxisConfigType] = Field(
+        default_factory=dict, description="Variables that can vary for this stage"
     )
 
     @field_validator("adapter")
@@ -89,6 +98,46 @@ class PrimaryModelConfig(BaseModel):
                 raise ValueError(f"JSON schema path '{v}' must end with '.json'")
 
         return v
+
+    @field_validator("template")
+    @classmethod
+    def validate_template_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError(
+                "Template cannot be empty. Provide a "
+                "Jinja2 template with {{variable}} placeholders."
+            )
+
+        if len(v.strip()) < 10:
+            raise ValueError(
+                "Template seems too short. Provide "
+                "a more detailed template for meaningful evaluation."
+            )
+
+        return v
+
+    @model_validator(mode="after")
+    def validate_template_variables(self) -> "PipelineStep":
+        """Validate that all template variables exist in axes."""
+        # Extract variables from template using regex
+        template_vars = set(re.findall(r"\{\{(\w+)\}\}", self.template))
+        axes_vars = set(self.axes.keys())
+
+        # Allow stage output variables (stage_N_output)
+        stage_vars = {
+            var for var in template_vars if re.match(r"stage_\d+_output", var)
+        }
+        template_vars = template_vars - stage_vars
+
+        missing_vars = template_vars - axes_vars
+        if missing_vars:
+            raise ValueError(
+                f"Template variables {sorted(missing_vars)} are not "
+                f"defined in axes. Add these variables to "
+                f"your axes or remove them from the template."
+            )
+
+        return self
 
 
 class DomainContext(BaseModel):
@@ -154,13 +203,9 @@ class Metadata(BaseModel):
 class EvaluationConfig(BaseModel):
     """Main configuration model for MetaReason evaluations."""
 
-    prompt_id: str = Field(..., description="Unique identifier for the prompt family")
-    prompt_template: str = Field(..., description="Jinja2-compatible template")
-    primary_model: PrimaryModelConfig = Field(
-        ..., description="Primary model under test"
-    )
-    axes: Dict[str, AxisConfigType] = Field(
-        ..., description="Variable axes configuration"
+    spec_id: str = Field(..., description="Unique identifier for the specification")
+    pipeline: List[PipelineStep] = Field(
+        ..., description="Pipeline steps for evaluation"
     )
     sampling: Optional[SamplingConfig] = Field(
         default_factory=SamplingConfig, description="Sampling strategy configuration"
@@ -180,63 +225,35 @@ class EvaluationConfig(BaseModel):
         None, description="Statistical model configuration"
     )
 
-    @field_validator("prompt_id")
+    @field_validator("spec_id")
     @classmethod
-    def validate_prompt_id_format(cls, v: str) -> str:
+    def validate_spec_id_format(cls, v: str) -> str:
         if not v:
-            raise ValueError("Prompt ID cannot be empty.")
+            raise ValueError("Spec ID cannot be empty.")
 
         if not re.match(r"^[a-z][a-z0-9_]*$", v):
             raise ValueError(
-                f"Prompt ID '{v}' should use lowercase letters, numbers, "
-                f"and underscores only. Suggestion: Use format like "
+                f"Spec ID '{v}' should use lowercase letters, numbers, "
+                f"and underscores only. Use format like "
                 f"'iso_42001_compliance_check'."
             )
 
         if len(v) > 100:
             raise ValueError(
-                f"Prompt ID is too long ({len(v)} characters). "
-                f"Suggestion: Keep under 100 characters for better "
+                f"Spec ID is too long ({len(v)} characters). "
+                f"Keep under 100 characters for better "
                 f"readability."
             )
 
         return v
 
-    @field_validator("prompt_template")
+    @field_validator("pipeline")
     @classmethod
-    def validate_prompt_template_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError(
-                "Prompt template cannot be empty. Suggestion: Provide a "
-                "Jinja2 template with {{variable}} placeholders."
-            )
-
-        if len(v.strip()) < 10:
-            raise ValueError(
-                "Prompt template seems too short. Suggestion: Provide "
-                "a more detailed template for meaningful evaluation."
-            )
-
-        return v
-
-    @field_validator("axes")
-    @classmethod
-    def validate_axes_not_empty(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_pipeline_not_empty(cls, v: List[PipelineStep]) -> List[PipelineStep]:
         if not v:
             raise ValueError(
-                "Schema cannot be empty. Suggestion: Define at least "
-                "one axis for prompt generation."
+                "Pipeline cannot be empty. Define at least " "one pipeline step."
             )
-
-        # Validate axis names
-        for axis_name in v.keys():
-            if not re.match(r"^[a-z][a-z0-9_]*$", axis_name):
-                raise ValueError(
-                    f"Axis name '{axis_name}' should use lowercase letters, "
-                    f"numbers, and underscores. Suggestion: Use format like "
-                    f"'persona_clause' or 'temperature'."
-                )
-
         return v
 
     @field_validator("n_variants")
@@ -259,45 +276,28 @@ class EvaluationConfig(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def validate_template_variables(self) -> "EvaluationConfig":
-        """Validate that all template variables exist in schema."""
-        # Extract variables from template using regex
-        template_vars = set(re.findall(r"\{\{(\w+)\}\}", self.prompt_template))
-        axes_vars = set(self.axes.keys())
-
-        missing_vars = template_vars - axes_vars
-        if missing_vars:
-            raise ValueError(
-                f"Template variables {sorted(missing_vars)} are not "
-                f"defined in schema. Suggestion: Add these variables to "
-                f"your schema or remove them from the template."
-            )
-
-        unused_vars = axes_vars - template_vars
-        if unused_vars:
-            # This is a warning rather than an error
-            pass  # Could log a warning here
-
-        return self
-
-    @model_validator(mode="after")
     def validate_stratified_sampling_axes(self) -> "EvaluationConfig":
         """Validate that stratified_by axes exist and are categorical."""
         if self.sampling and self.sampling.stratified_by:
+            # Collect all axes from all pipeline steps
+            all_axes = {}
+            for step in self.pipeline:
+                all_axes.update(step.axes)
+
             for axis_name in self.sampling.stratified_by:
-                if axis_name not in self.axes:
+                if axis_name not in all_axes:
                     raise ValueError(
                         f"Stratified sampling axis '{axis_name}' not found "
-                        f"in schema. Suggestion: Ensure all stratified_by "
-                        f"axes are defined in schema."
+                        f"in any pipeline step axes. Ensure all stratified_by "
+                        f"axes are defined in pipeline step axes."
                     )
 
-                axis_config = self.axes[axis_name]
+                axis_config = all_axes[axis_name]
                 if not isinstance(axis_config, CategoricalAxis):
                     raise ValueError(
                         f"Stratified sampling axis '{axis_name}' must be "
                         f"categorical, got {type(axis_config).__name__}. "
-                        f"Suggestion: Only categorical axes can be used for "
+                        f"Only categorical axes can be used for "
                         f"stratified sampling."
                     )
 
@@ -327,29 +327,18 @@ class EvaluationConfig(BaseModel):
     @model_validator(mode="after")
     def validate_statistical_requirements(self) -> "EvaluationConfig":
         """Validate statistical requirements for meaningful analysis."""
-        # Count categorical combinations for power analysis
-        categorical_combinations = 1
-        continuous_axes = 0
+        # Count categorical combinations across all pipeline steps
+        total_categorical_combinations = 1
+        total_continuous_axes = 0
 
-        for axis_config in self.axes.values():
-            if isinstance(axis_config, CategoricalAxis):
-                categorical_combinations *= len(axis_config.values)
-            elif isinstance(axis_config, ContinuousAxis):
-                continuous_axes += 1
-
-        # Rule of thumb: need at least 10 samples per categorical combination
-        # min_variants_needed = categorical_combinations * 10
+        for step in self.pipeline:
+            for axis_config in step.axes.values():
+                if isinstance(axis_config, CategoricalAxis):
+                    total_categorical_combinations *= len(axis_config.values)
+                elif isinstance(axis_config, ContinuousAxis):
+                    total_continuous_axes += 1
 
         # This is a warning-level check, not a hard requirement
-        # The spec example actually violates this rule (576 combinations, 2000 variants)
-        # So we'll skip this validation for now
-        # if self.n_variants < min_variants_needed and categorical_combinations > 1:
-        #     raise ValueError(
-        #         f"With {categorical_combinations} categorical "
-        #         f"combinations, recommend at least {min_variants_needed} "
-        #         f"variants for statistical power. Currently set to "
-        #         f"{self.n_variants}. Suggestion: Increase n_variants or "
-        #         f"reduce categorical axis complexity."
-        #     )
+        # Skip validation for now as requirements may vary
 
         return self

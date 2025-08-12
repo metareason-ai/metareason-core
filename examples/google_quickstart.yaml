@@ -1,53 +1,46 @@
 # Google Gemini Quickstart Configuration
 # This example demonstrates using Google Gemini models for LLM evaluation
 
-prompt_id: "google_gemini_quickstart_evaluation"
+spec_id: "google_gemini_quickstart_evaluation"
 
-# Primary Model Configuration
-primary_model:
-  adapter: google
-  model: gemini-2.0-flash-001
-  temperature: 0.5
-  max_tokens: 1500
-  json_schema: "schemas/multi_dimensional.json"
+pipeline:
+  - template: |
+      You are evaluating the quality of reasoning in responses to questions about {{topic}}.
 
-# Prompt Template
-prompt_template: |
-  You are evaluating the quality of reasoning in responses to questions about {{topic}}.
+      Question: {{question}}
 
-  Question: {{question}}
-
-  Please provide a clear, well-reasoned answer that demonstrates {{reasoning_style}} thinking.
-  Consider multiple perspectives and explain your reasoning step by step.
-
-# Schema Definition - Parameter distributions for Latin Hypercube Sampling
-schema:
-  topic:
-    type: categorical
-    values:
-      - "artificial intelligence ethics"
-      - "climate change solutions"
-      - "economic policy analysis"
-      - "scientific methodology"
-      - "philosophical reasoning"
-
-  question:
-    type: categorical
-    values:
-      - "What are the key considerations when implementing this approach?"
-      - "How would you evaluate the effectiveness of proposed solutions?"
-      - "What potential unintended consequences should be considered?"
-      - "How do different stakeholder perspectives influence the analysis?"
-      - "What evidence would strengthen the conclusions?"
-
-  reasoning_style:
-    type: categorical
-    values:
-      - "analytical"
-      - "systems-thinking"
-      - "critical"
-      - "creative"
-      - "evidence-based"
+      Please provide a clear, well-reasoned answer that demonstrates {{reasoning_style}} thinking.
+      Consider multiple perspectives and explain your reasoning step by step.
+    adapter: google
+    model: gemini-2.0-flash-001
+    temperature: 0.5
+    max_tokens: 1500
+    json_schema: "schemas/multi_dimensional.json"
+    axes:
+      topic:
+        type: categorical
+        values:
+          - "artificial intelligence ethics"
+          - "climate change solutions"
+          - "economic policy analysis"
+          - "scientific methodology"
+          - "philosophical reasoning"
+      question:
+        type: categorical
+        values:
+          - "What are the key considerations when implementing this approach?"
+          - "How would you evaluate the effectiveness of proposed solutions?"
+          - "What potential unintended consequences should be considered?"
+          - "How do different stakeholder perspectives influence the analysis?"
+          - "What evidence would strengthen the conclusions?"
+      reasoning_style:
+        type: categorical
+        values:
+          - "analytical"
+          - "systems-thinking"
+          - "critical"
+          - "creative"
+          - "evidence-based"
 
 # Sampling Configuration
 sampling:

@@ -49,11 +49,17 @@ class EvaluationFactory:
         if axis_values is None:
             axis_values = ["value1", "value2"]
 
+        axes = {axis_name: {"type": "categorical", "values": axis_values}}
+
         builder = (
             ConfigBuilder()
-            .test_id("single_axis_test")
-            .prompt_template(f"Test {{{{{axis_name}}}}}")
-            .with_axis(axis_name, lambda a: a.categorical(axis_values))
+            .spec_id("single_axis_test")
+            .add_pipeline_step(
+                template=f"Test {{{{{axis_name}}}}}",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                axes=axes,
+            )
             .with_oracle(
                 "accuracy",
                 lambda o: o.embedding_similarity(
@@ -80,10 +86,20 @@ class EvaluationFactory:
             EvaluationConfig: Configuration with multiple axes
         """
         template_vars = " ".join([f"{{{{{name}}}}}" for name in axes_config.keys()])
+
+        axes = {}
+        for axis_name, values in axes_config.items():
+            axes[axis_name] = {"type": "categorical", "values": values}
+
         builder = (
             ConfigBuilder()
-            .test_id("multi_axis_test")
-            .prompt_template(f"Test {template_vars}")
+            .spec_id("multi_axis_test")
+            .add_pipeline_step(
+                template=f"Test {template_vars}",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                axes=axes,
+            )
             .with_oracle(
                 "accuracy",
                 lambda o: o.embedding_similarity(
@@ -91,9 +107,6 @@ class EvaluationFactory:
                 ),
             )
         )
-
-        for axis_name, values in axes_config.items():
-            builder = builder.with_axis(axis_name, lambda a, v=values: a.categorical(v))
 
         if overrides:
             builder = builder.with_params(**overrides)
@@ -147,9 +160,8 @@ class EvaluationFactory:
         """
         builder = (
             ConfigBuilder()
-            .test_id("multi_oracle_test")
-            .prompt_template("Test {{param}}")
-            .with_axis("param", lambda a: a.categorical(["A", "B"]))
+            .spec_id("multi_oracle_test")
+            .single_step(template="Test {{param}}", param=["A", "B"])
             .with_oracles(**oracle_configs)
         )
 
@@ -184,7 +196,18 @@ class EvaluationFactory:
             else:
                 return builder.with_params(adapter=adapter, model=model, **model_params)
 
-        return ConfigBuilder().minimal().primary_model(configure_model).build()
+        return (
+            ConfigBuilder()
+            .minimal()
+            .add_pipeline_step(
+                template="Test {{param}}",
+                adapter=adapter,
+                model=model,
+                axes={"param": {"type": "categorical", "values": ["A", "B"]}},
+                **model_params,
+            )
+            .build()
+        )
 
     @classmethod
     def with_json_schema(
@@ -202,7 +225,13 @@ class EvaluationFactory:
         builder = (
             ConfigBuilder()
             .minimal()
-            .primary_model(lambda p: p.with_json_schema(schema_path))
+            .add_pipeline_step(
+                template="Test {{param}}",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                json_schema=schema_path,
+                axes={"param": {"type": "categorical", "values": ["A", "B"]}},
+            )
         )
 
         if overrides:
@@ -317,7 +346,7 @@ class YamlFileFactory:
         if error_type == "missing_field":
             config = EvaluationFactory.invalid_missing_field("oracles")
         elif error_type == "empty_prompt_id":
-            config = EvaluationFactory.invalid_empty_field("prompt_id")
+            config = EvaluationFactory.invalid_empty_field("spec_id")
         elif error_type == "missing_primary_model":
             config = EvaluationFactory.invalid_missing_field("primary_model")
         else:

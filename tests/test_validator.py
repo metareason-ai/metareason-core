@@ -127,15 +127,15 @@ class TestValidateYamlFile:
     def test_validation_error(self, tmp_path):
         """Test handling of validation errors."""
         yaml_content = """
-prompt_id: ""
-prompt_template: "test"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  test:
-    type: categorical
-    values: ["a"]
+spec_id: ""
+pipeline:
+  - template: "test"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      test:
+        type: categorical
+        values: ["a"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -154,15 +154,15 @@ oracles:
     def test_valid_configuration(self, tmp_path):
         """Test validation of valid configuration."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param:
-    type: categorical
-    values: ["a", "b", "c"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param:
+        type: categorical
+        values: ["a", "b", "c"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -176,23 +176,23 @@ oracles:
 
         assert config is not None
         assert report.is_valid
-        assert config.prompt_id == "test_config"
+        assert config.spec_id == "test_config"
 
     def test_unused_axes_warning(self, tmp_path):
         """Test warning for unused axes."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param1}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param1:
-    type: categorical
-    values: ["a", "b"]
-  unused_param:
-    type: categorical
-    values: ["x", "y"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param1}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param1:
+        type: categorical
+        values: ["a", "b"]
+      unused_param:
+        type: categorical
+        values: ["x", "y"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -212,18 +212,18 @@ oracles:
     def test_unused_axes_error_in_strict_mode(self, tmp_path):
         """Test error for unused axes in strict mode."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param1}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param1:
-    type: categorical
-    values: ["a", "b"]
-  unused_param:
-    type: categorical
-    values: ["x", "y"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param1}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param1:
+        type: categorical
+        values: ["a", "b"]
+      unused_param:
+        type: categorical
+        values: ["x", "y"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -243,18 +243,18 @@ oracles:
     def test_categorical_axis_warnings(self, tmp_path):
         """Test warnings for categorical axis complexity."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{many_values}} and {{few_values}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  many_values:
-    type: categorical
-    values: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]
-  few_values:
-    type: categorical
-    values: ["x"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{many_values}} and {{few_values}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      many_values:
+        type: categorical
+        values: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]
+      few_values:
+        type: categorical
+        values: ["x"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -281,18 +281,18 @@ oracles:
     def test_sample_size_recommendation(self, tmp_path):
         """Test sample size recommendations."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param1}} and {{param2}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param1:
-    type: categorical
-    values: ["a", "b", "c"]
-  param2:
-    type: categorical
-    values: ["x", "y"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param1}} and {{param2}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param1:
+        type: categorical
+        values: ["a", "b", "c"]
+      param2:
+        type: categorical
+        values: ["x", "y"]
 n_variants: 100
 oracles:
   accuracy:
@@ -316,18 +316,18 @@ oracles:
     def test_insufficient_sample_size_suggestion(self, tmp_path):
         """Test suggestion for insufficient sample size."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param1}} and {{param2}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param1:
-    type: categorical
-    values: ["a", "b", "c", "d"]
-  param2:
-    type: categorical
-    values: ["x", "y", "z"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param1}} and {{param2}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param1:
+        type: categorical
+        values: ["a", "b", "c", "d"]
+      param2:
+        type: categorical
+        values: ["x", "y", "z"]
 n_variants: 100  # 4*3=12 combinations, need 120+
 oracles:
   accuracy:
@@ -351,15 +351,15 @@ oracles:
     def test_statistical_config_suggestion(self, tmp_path):
         """Test suggestion to add statistical config."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param:
-    type: categorical
-    values: ["a", "b"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param:
+        type: categorical
+        values: ["a", "b"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -379,15 +379,15 @@ oracles:
     def test_oracle_count_suggestion(self, tmp_path):
         """Test suggestion for multiple oracles."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param:
-    type: categorical
-    values: ["a", "b"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param:
+        type: categorical
+        values: ["a", "b"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -407,15 +407,15 @@ oracles:
     def test_metadata_suggestions(self, tmp_path):
         """Test suggestions for metadata."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param:
-    type: categorical
-    values: ["a", "b"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param:
+        type: categorical
+        values: ["a", "b"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -435,15 +435,15 @@ oracles:
     def test_incomplete_metadata_suggestions(self, tmp_path):
         """Test suggestions for incomplete metadata."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param:
-    type: categorical
-    values: ["a", "b"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param:
+        type: categorical
+        values: ["a", "b"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -466,15 +466,15 @@ metadata:
     def test_general_exception_handling(self, tmp_path, monkeypatch):
         """Test handling of general exceptions."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param:
-    type: categorical
-    values: ["a", "b"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param:
+        type: categorical
+        values: ["a", "b"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -529,15 +529,15 @@ class TestValidateYamlDirectory:
     def test_validate_single_yaml_file(self, tmp_path):
         """Test validating directory with single YAML file."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param:
-    type: categorical
-    values: ["a", "b"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param:
+        type: categorical
+        values: ["a", "b"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -556,15 +556,15 @@ oracles:
     def test_validate_multiple_yaml_files(self, tmp_path):
         """Test validating directory with multiple YAML files."""
         valid_yaml = """
-prompt_id: valid_config
-prompt_template: "Test {{param}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param:
-    type: categorical
-    values: ["a", "b"]
+spec_id: valid_config
+pipeline:
+  - template: "Test {{param}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param:
+        type: categorical
+        values: ["a", "b"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -573,12 +573,15 @@ oracles:
 """
 
         invalid_yaml = """
-prompt_id: ""
-prompt_template: "Test"
-axes:
-  param:
-    type: categorical
-    values: []
+spec_id: ""
+pipeline:
+  - template: "Test"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param:
+        type: categorical
+        values: []
 oracles:
   accuracy:
     type: embedding_similarity
@@ -603,18 +606,18 @@ oracles:
     def test_validate_directory_with_strict_mode(self, tmp_path):
         """Test validating directory in strict mode."""
         yaml_content = """
-prompt_id: test_config
-prompt_template: "Test {{param1}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  param1:
-    type: categorical
-    values: ["a", "b"]
-  unused_param:
-    type: categorical
-    values: ["x", "y"]
+spec_id: test_config
+pipeline:
+  - template: "Test {{param1}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param1:
+        type: categorical
+        values: ["a", "b"]
+      unused_param:
+        type: categorical
+        values: ["x", "y"]
 oracles:
   accuracy:
     type: embedding_similarity

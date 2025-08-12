@@ -14,7 +14,7 @@ from metareason.config.cache import (
     is_caching_enabled,
     set_global_cache,
 )
-from metareason.config.models import EvaluationConfig
+from tests.fixtures.config_builders import ConfigBuilder
 
 
 class TestConfigCache:
@@ -48,7 +48,7 @@ class TestConfigCache:
         # Get configuration
         cached_config = cache.get(test_path)
         assert cached_config is not None
-        assert cached_config.prompt_id == sample_config.prompt_id
+        assert cached_config.spec_id == sample_config.spec_id
 
     def test_cache_miss(self):
         """Test cache miss for non-existent file."""
@@ -311,19 +311,20 @@ class TestCacheThreadSafety:
 @pytest.fixture
 def sample_config():
     """Create a sample configuration for testing."""
-    config_data = {
-        "prompt_id": "test_prompt",
-        "prompt_template": "Hello {{name}}, this is a test template",
-        "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-        "axes": {
-            "name": {"type": "categorical", "values": ["Alice", "Bob", "Charlie"]}
-        },
-        "oracles": {
-            "accuracy": {
-                "type": "embedding_similarity",
-                "canonical_answer": "This is a comprehensive test answer for validation",
-                "threshold": 0.8,
-            }
-        },
-    }
-    return EvaluationConfig(**config_data)
+    return (
+        ConfigBuilder()
+        .spec_id("test_config_cache")
+        .single_step(
+            template="Hello {{name}}, this is a test template",
+            adapter="openai",
+            model="gpt-3.5-turbo",
+            name=["Alice", "Bob", "Charlie"],
+        )
+        .with_oracle(
+            "accuracy",
+            lambda o: o.embedding_similarity(
+                "This is a comprehensive test answer for validation", threshold=0.8
+            ),
+        )
+        .build()
+    )

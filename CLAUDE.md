@@ -42,7 +42,7 @@ pytest
 pytest tests/test_config_loader.py
 
 # Run single test
-pytest tests/test_config_loader.py::test_all_distribution_types -v
+pytest tests/test_config_loader.py::test_load_valid_yaml_config -v
 ```
 
 ### Code Quality
@@ -69,13 +69,13 @@ metareason config validate examples/simple_evaluation.yaml
 metareason templates generate examples/simple_evaluation.yaml --output templates.json
 
 # Run evaluation (dry run)
-metareason run examples/simple_evaluation.yaml --dry-run
+metareason run --spec-file examples/simple_evaluation.yaml --dry-run
 
 # Run evaluation with output
-metareason run examples/simple_evaluation.yaml --output results.json
+metareason run --spec-file examples/simple_evaluation.yaml --output results.json
 
 # Quick start with local models
-metareason run examples/ollama_quickstart.yaml --dry-run
+metareason run --spec-file examples/google_quickstart.yaml --dry-run
 ```
 
 ## Project Architecture
@@ -100,8 +100,9 @@ MetaReason Core is a statistical evaluation framework for Large Language Models 
 
 ### YAML Configuration Schema
 The project uses a declarative YAML format for evaluation specifications:
-- **Prompt Templates**: Jinja2-compatible with variable substitution
-- **Schema Definition**: Categorical and continuous parameter distributions
+- **Pipeline Steps**: Self-contained stages with templates, model configs, and variable axes
+- **Template per Step**: Jinja2-compatible with variable substitution for each pipeline step
+- **Axes per Step**: Categorical and continuous parameter distributions specific to each step
 - **Sampling Configuration**: Latin Hypercube with optimization criteria
 - **Oracle Definitions**: Multiple evaluation criteria (LLM-as-judge, quality assurance, embedding similarity, custom)
 - **Statistical Configuration**: Bayesian inference settings
@@ -128,24 +129,38 @@ The project includes a comprehensive adapter system for LLM providers:
 #### Configuration
 ```yaml
 adapters:
-  # Cloud provider example
-  cloud:
-    type: openai
+  # Single-stage pipeline with cloud model
+spec_id: cloud_evaluation
+pipeline:
+  - template: "Analyze {{topic}} with {{approach}}"
+    adapter: openai
     model: gpt-4
-    api_key: ${OPENAI_API_KEY}
-    rate_limit:
-      requests_per_minute: 60
-      tokens_per_minute: 80000
-    retry:
-      max_attempts: 3
-      backoff_factor: 2.0
+    temperature: 0.7
+    axes:
+      topic:
+        type: categorical
+        values: ["AI", "ML"]
+      approach:
+        type: categorical
+        values: ["technical", "business"]
 
-  # Local model example
-  local:
-    type: ollama
-    base_url: http://localhost:11434
-    default_model: llama3
-    pull_missing_models: true
+# Multi-stage pipeline with local models
+spec_id: local_multi_stage
+pipeline:
+  - template: "Summarize {{text}}"
+    adapter: ollama
+    model: llama3
+    axes:
+      text:
+        type: categorical
+        values: ["doc1.txt", "doc2.txt"]
+  - template: "Analyze: {{stage_1_output}} using {{method}}"
+    adapter: ollama
+    model: mistral
+    axes:
+      method:
+        type: categorical
+        values: ["critical", "supportive"]
 ```
 
 ### Privacy and Local Model Support
@@ -167,19 +182,25 @@ The framework includes comprehensive privacy protection and local model evaluati
 #### Example Configurations
 ```yaml
 # Privacy-focused local evaluation
-adapters:
-  local:
-    type: ollama
-    base_url: http://localhost:11434
-    default_model: llama3
-    pull_missing_models: true
+spec_id: privacy_evaluation
+pipeline:
+  - template: "Evaluate {{content}} for {{criteria}}"
+    adapter: ollama
+    model: llama3
+    temperature: 0.5
+    axes:
+      content:
+        type: categorical
+        values: ["sample1", "sample2"]
+      criteria:
+        type: categorical
+        values: ["accuracy", "clarity"]
 
 oracles:
-  judge:
+  quality:
     type: llm_judge
-    adapter: local
-    model: llama3
-    system_prompt: "Rate response quality from 1-5."
+    rubric: "Rate response quality from 1-5."
+    judge_model: llama3
 ```
 
 ### Development Workflow

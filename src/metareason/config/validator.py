@@ -134,48 +134,48 @@ def _add_warnings_and_suggestions(
     strict: bool,
 ) -> None:
     """Add warnings and suggestions based on best practices."""
-    # Check for unused axes
-    template_vars = set()
+    # Check for unused axes in pipeline steps
     import re
 
-    for match in re.finditer(r"\{\{(\w+)\}\}", config.prompt_template):
-        template_vars.add(match.group(1))
+    for step_idx, step in enumerate(config.pipeline):
+        template_vars = set()
+        for match in re.finditer(r"\{\{(\w+)\}\}", step.template):
+            template_vars.add(match.group(1))
 
-    unused_axes = set(config.axes.keys()) - template_vars
-    if unused_axes:
-        msg = f"Unused axes defined: {sorted(unused_axes)}"
-        if strict:
-            report.add_error(
-                "axes", msg, "Remove unused axes or use them in prompt_template"
-            )
-        else:
-            report.add_warning(msg)
+        unused_axes = set(step.axes.keys()) - template_vars
+        if unused_axes:
+            msg = f"Step {step_idx + 1}: Unused axes defined: {sorted(unused_axes)}"
+            if strict:
+                report.add_error(
+                    "pipeline", msg, "Remove unused axes or use them in step template"
+                )
+            else:
+                report.add_warning(msg)
 
-    # Check categorical axis complexity
-    for axis_name, axis_config in config.axes.items():
-        if hasattr(axis_config, "values"):  # Categorical
-            if len(axis_config.values) > 10:
-                msg = f"Axis '{axis_name}' has {len(axis_config.values)} values (>10)"
-                report.add_warning(
-                    f"{msg}. Consider reducing for better statistical power."
-                )
-            elif len(axis_config.values) < 3:
-                msg = f"Axis '{axis_name}' has only {len(axis_config.values)} values"
-                report.add_suggestion(
-                    f"{msg}. Consider adding more values for meaningful variation."
-                )
+    # Check categorical axis complexity across all pipeline steps
+    total_categorical_combinations = 1
+
+    for step_idx, step in enumerate(config.pipeline):
+        for axis_name, axis_config in step.axes.items():
+            if hasattr(axis_config, "values"):  # Categorical
+                if len(axis_config.values) > 10:
+                    msg = f"Step {step_idx + 1} axis '{axis_name}' has {len(axis_config.values)} values (>10)"
+                    report.add_warning(
+                        f"{msg}. Consider reducing for better statistical power."
+                    )
+                elif len(axis_config.values) < 3:
+                    msg = f"Step {step_idx + 1} axis '{axis_name}' has only {len(axis_config.values)} values"
+                    report.add_suggestion(
+                        f"{msg}. Consider adding more values for meaningful variation."
+                    )
+                total_categorical_combinations *= len(axis_config.values)
 
     # Check sample size recommendations
-    categorical_combinations = 1
-    for axis_config in config.axes.values():
-        if hasattr(axis_config, "values"):
-            categorical_combinations *= len(axis_config.values)
-
-    if categorical_combinations > 1:
-        recommended_samples = categorical_combinations * 10
+    if total_categorical_combinations > 1:
+        recommended_samples = total_categorical_combinations * 10
         if config.n_variants < recommended_samples:
             report.add_suggestion(
-                f"With {categorical_combinations} categorical combinations, "
+                f"With {total_categorical_combinations} categorical combinations, "
                 f"consider using at least {recommended_samples} variants "
                 f"(currently {config.n_variants})"
             )

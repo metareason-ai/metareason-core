@@ -10,7 +10,6 @@ from metareason.config.models import EvaluationConfig
 
 from .factories.evaluation_factory import YamlFileFactory
 from .fixtures.config_builders import AxisBuilder, ConfigBuilder, OracleBuilder
-from .helpers.schema_migration import migrate_config_v1_to_v2, migrate_config_v2_to_v1
 
 
 class TestConfigBuilder:
@@ -21,20 +20,24 @@ class TestConfigBuilder:
         config = config_builder.minimal().build()
 
         assert isinstance(config, EvaluationConfig)
-        assert config.prompt_id == "minimal_test"
-        assert "{{param}}" in config.prompt_template
-        assert "param" in config.axes
+        assert config.spec_id == "minimal_test"
+        assert len(config.pipeline) == 1
+        step = config.pipeline[0]
+        assert "{{param}}" in step.template
+        assert "param" in step.axes
         assert config.oracles.accuracy is not None
-        assert config.primary_model is not None
-        assert config.primary_model.adapter == "openai"
+        assert step.adapter == "openai"
+        assert step.model == "gpt-3.5-turbo"
 
     def test_comprehensive_config_builder(self, config_builder):
         """Test creating a comprehensive configuration with builder."""
         config = config_builder.comprehensive().build()
 
         assert isinstance(config, EvaluationConfig)
-        assert config.prompt_id == "comprehensive_test"
-        assert len(config.axes) >= 2
+        assert config.spec_id == "comprehensive_test"
+        assert len(config.pipeline) == 1
+        step = config.pipeline[0]
+        assert len(step.axes) >= 2
         assert config.oracles.accuracy is not None
         # Check if we have more than just accuracy oracle
         oracle_count = sum(
@@ -49,10 +52,12 @@ class TestConfigBuilder:
     def test_fluent_api_chaining(self, config_builder):
         """Test that the fluent API works correctly."""
         config = (
-            config_builder.test_id("fluent_test")
-            .prompt_template("Test {{name}} with {{style}}")
-            .with_axis("name", lambda a: a.categorical(["Alice", "Bob"]))
-            .with_axis("style", lambda a: a.categorical(["formal", "casual"]))
+            config_builder.spec_id("fluent_test")
+            .single_step(
+                template="Test {{name}} with {{style}}",
+                name=["Alice", "Bob"],
+                style=["formal", "casual"],
+            )
             .with_oracle(
                 "explainability",
                 lambda o: o.llm_judge(
@@ -64,9 +69,10 @@ class TestConfigBuilder:
             .build()
         )
 
-        assert config.prompt_id == "fluent_test"
-        assert config.axes["name"].values == ["Alice", "Bob"]
-        assert config.axes["style"].values == ["formal", "casual"]
+        assert config.spec_id == "fluent_test"
+        step = config.pipeline[0]
+        assert step.axes["name"].values == ["Alice", "Bob"]
+        assert step.axes["style"].values == ["formal", "casual"]
         assert config.oracles.explainability is not None
         assert config.n_variants == 500
 
@@ -74,8 +80,8 @@ class TestConfigBuilder:
         """Test generating YAML from builder."""
         yaml_content = config_builder.minimal().to_yaml()
 
-        assert "prompt_id: minimal_test" in yaml_content
-        assert "primary_model:" in yaml_content
+        assert "spec_id: minimal_test" in yaml_content
+        assert "pipeline:" in yaml_content
         assert "adapter: openai" in yaml_content
         assert "axes:" in yaml_content
         assert "oracles:" in yaml_content
@@ -139,32 +145,35 @@ class TestEvaluationFactory:
         config = evaluation_factory.minimal()
 
         assert isinstance(config, EvaluationConfig)
-        assert config.primary_model is not None
+        assert len(config.pipeline) == 1
+        assert config.pipeline[0].adapter is not None
 
     def test_single_axis_factory(self, evaluation_factory):
         """Test creating config with single axis."""
         config = evaluation_factory.with_single_axis("topic", ["AI", "ML"])
 
-        assert "topic" in config.axes
-        assert config.axes["topic"].values == ["AI", "ML"]
-        assert "{{topic}}" in config.prompt_template
+        step = config.pipeline[0]
+        assert "topic" in step.axes
+        assert step.axes["topic"].values == ["AI", "ML"]
+        assert "{{topic}}" in step.template
 
     def test_multiple_axes_factory(self, evaluation_factory):
         """Test creating config with multiple axes."""
         axes_config = {"name": ["Alice", "Bob"], "style": ["formal", "casual"]}
         config = evaluation_factory.with_multiple_axes(axes_config)
 
-        assert len(config.axes) == 2
-        assert config.axes["name"].values == ["Alice", "Bob"]
-        assert config.axes["style"].values == ["formal", "casual"]
+        step = config.pipeline[0]
+        assert len(step.axes) == 2
+        assert step.axes["name"].values == ["Alice", "Bob"]
+        assert step.axes["style"].values == ["formal", "casual"]
 
     def test_invalid_config_factory(self, evaluation_factory):
         """Test creating invalid configurations."""
         missing_oracles = evaluation_factory.invalid_missing_field("oracles")
         assert "oracles" not in missing_oracles
 
-        empty_prompt_id = evaluation_factory.invalid_empty_field("prompt_id")
-        assert empty_prompt_id["prompt_id"] == ""
+        empty_spec_id = evaluation_factory.invalid_empty_field("spec_id")
+        assert empty_spec_id["spec_id"] == ""
 
 
 class TestYamlFileFactory:
@@ -180,8 +189,8 @@ class TestYamlFileFactory:
             assert temp_path.suffix == ".yaml"
 
             content = temp_path.read_text()
-            assert "prompt_id:" in content
-            assert "primary_model:" in content
+            assert "spec_id:" in content
+            assert "pipeline:" in content
             assert "axes:" in content
         finally:
             if temp_path.exists():
@@ -189,93 +198,15 @@ class TestYamlFileFactory:
 
     def test_create_minimal_file(self):
         """Test creating minimal config file."""
-        temp_path = YamlFileFactory.create_minimal_file(prompt_id="custom_test")
+        temp_path = YamlFileFactory.create_minimal_file(spec_id="custom_test")
 
         try:
             assert temp_path.exists()
             content = temp_path.read_text()
-            assert "prompt_id: custom_test" in content
+            assert "spec_id: custom_test" in content
         finally:
             if temp_path.exists():
                 temp_path.unlink()
-
-
-class TestSchemaMigration:
-    """Test the schema migration utilities."""
-
-    def test_v1_to_v2_migration(self):
-        """Test migrating from v1 to v2 format."""
-        v1_config = {
-            "prompt_id": "test_migration",
-            "prompt_template": "Hello {{name}}",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "Test",
-                    "threshold": 0.8,
-                }
-            },
-        }
-
-        v2_config = migrate_config_v1_to_v2(v1_config)
-
-        assert v2_config["test_id"] == "test_migration"
-        assert "prompt_id" not in v2_config
-        assert "prompt_template" not in v2_config
-        assert "pipeline" in v2_config
-        assert v2_config["pipeline"][0]["type"] == "template"
-        assert v2_config["pipeline"][0]["template"] == "Hello {{name}}"
-
-    def test_v2_to_v1_migration(self):
-        """Test migrating from v2 back to v1 format."""
-        v2_config = {
-            "test_id": "test_migration",
-            "pipeline": [{"type": "template", "template": "Hello {{name}}"}],
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "Test",
-                    "threshold": 0.8,
-                }
-            },
-        }
-
-        v1_config = migrate_config_v2_to_v1(v2_config)
-
-        assert v1_config["prompt_id"] == "test_migration"
-        assert v1_config["prompt_template"] == "Hello {{name}}"
-        assert "test_id" not in v1_config
-        assert "pipeline" not in v1_config
-
-    def test_round_trip_migration(self):
-        """Test that migration is reversible."""
-        original_v1 = {
-            "prompt_id": "roundtrip_test",
-            "prompt_template": "Test {{param}}",
-            "primary_model": {"adapter": "openai", "model": "gpt-4"},
-            "axes": {"param": {"type": "categorical", "values": ["A", "B"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "Test answer",
-                    "threshold": 0.8,
-                }
-            },
-        }
-
-        # v1 -> v2 -> v1
-        v2_config = migrate_config_v1_to_v2(original_v1)
-        restored_v1 = migrate_config_v2_to_v1(v2_config)
-
-        assert restored_v1["prompt_id"] == original_v1["prompt_id"]
-        assert restored_v1["prompt_template"] == original_v1["prompt_template"]
-        assert restored_v1["primary_model"] == original_v1["primary_model"]
-        assert restored_v1["axes"] == original_v1["axes"]
-        assert restored_v1["oracles"] == original_v1["oracles"]
 
 
 class TestFixtures:
@@ -290,7 +221,7 @@ class TestFixtures:
     def test_minimal_config_fixture(self, minimal_config):
         """Test minimal_config fixture."""
         assert isinstance(minimal_config, EvaluationConfig)
-        assert minimal_config.prompt_id == "minimal_test"
+        assert minimal_config.spec_id == "minimal_test"
 
     def test_temp_config_file_fixture(self, temp_config_file):
         """Test temp_config_file fixture."""
@@ -301,13 +232,13 @@ class TestFixtures:
         assert temp_path.suffix == ".yaml"
 
         content = temp_path.read_text()
-        assert "prompt_id:" in content
-        assert "primary_model:" in content
+        assert "spec_id:" in content
+        assert "pipeline:" in content
 
     def test_yaml_template_fixture(self, yaml_template):
         """Test yaml_template fixture."""
-        rendered = yaml_template.render(yaml_template.MINIMAL, prompt_id="fixture_test")
-        assert "prompt_id: fixture_test" in rendered
+        rendered = yaml_template.render(yaml_template.MINIMAL, spec_id="fixture_test")
+        assert "spec_id: fixture_test" in rendered
 
     def test_common_axes_fixture(self, common_axes):
         """Test common_axes fixture."""

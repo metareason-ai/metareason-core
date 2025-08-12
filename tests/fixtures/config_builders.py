@@ -119,6 +119,49 @@ class OracleBuilder:
         return deepcopy(self._config)
 
 
+class PipelineStepBuilder:
+    """Builder for creating pipeline step configurations."""
+
+    def __init__(self):
+        self._config = {
+            "template": "Test {{param}}",
+            "adapter": "openai",
+            "model": "gpt-3.5-turbo",
+            "axes": {},
+        }
+
+    def template(self, template: str) -> "PipelineStepBuilder":
+        """Set the template for this step."""
+        self._config["template"] = template
+        return self
+
+    def adapter(self, adapter: str) -> "PipelineStepBuilder":
+        """Set the adapter for this step."""
+        self._config["adapter"] = adapter
+        return self
+
+    def model(self, model: str) -> "PipelineStepBuilder":
+        """Set the model for this step."""
+        self._config["model"] = model
+        return self
+
+    def with_axis(
+        self, name: str, axis_config: Dict[str, Any]
+    ) -> "PipelineStepBuilder":
+        """Add an axis to this step."""
+        self._config["axes"][name] = axis_config
+        return self
+
+    def with_params(self, **params) -> "PipelineStepBuilder":
+        """Add additional parameters."""
+        self._config.update(params)
+        return self
+
+    def build(self) -> Dict[str, Any]:
+        """Build the pipeline step configuration."""
+        return deepcopy(self._config)
+
+
 class PrimaryModelBuilder:
     """Builder for primary model configurations."""
 
@@ -180,53 +223,72 @@ class ConfigBuilder:
 
     Example:
         config = (ConfigBuilder()
-            .test_id("my_test")
-            .prompt_template("Hello {{name}}")
-            .with_axis("name", lambda a: a.categorical(["Alice", "Bob"]))
+            .spec_id("my_test")
+            .single_step(
+                template="Hello {{name}}",
+                name=["Alice", "Bob"]
+            )
             .with_oracle("accuracy", lambda o: o.embedding_similarity("Test answer"))
             .build())
     """
 
     def __init__(self):
         self._config: Dict[str, Any] = {
-            "prompt_id": "test_config",
-            "prompt_template": "Hello {{name}}, this is a test template",
-            "primary_model": PrimaryModelBuilder().build(),
-            "axes": {},
+            "spec_id": "test_config",
+            "pipeline": [],
             "oracles": {},
         }
 
-    def test_id(self, test_id: str) -> "ConfigBuilder":
-        """Set the test ID (currently prompt_id)."""
-        self._config["prompt_id"] = test_id
+    def spec_id(self, spec_id: str) -> "ConfigBuilder":
+        """Set the spec ID."""
+        self._config["spec_id"] = spec_id
         return self
 
-    def prompt_template(self, template: str) -> "ConfigBuilder":
-        """Set the prompt template."""
-        self._config["prompt_template"] = template
+    def add_pipeline_step(
+        self,
+        template: str,
+        adapter: str = "openai",
+        model: str = "gpt-3.5-turbo",
+        axes: Optional[Dict[str, Any]] = None,
+        **model_params,
+    ) -> "ConfigBuilder":
+        """Add a pipeline step."""
+        step = {
+            "template": template,
+            "adapter": adapter,
+            "model": model,
+            "axes": axes or {},
+        }
+        step.update(model_params)
+        self._config["pipeline"].append(step)
         return self
 
-    def primary_model(self, builder_func) -> "ConfigBuilder":
-        """Configure primary model using a builder function."""
-        builder = PrimaryModelBuilder()
-        self._config["primary_model"] = builder_func(builder).build()
+    def add_pipeline_step_with_builder(self, builder_func) -> "ConfigBuilder":
+        """Add a pipeline step using a builder function."""
+        builder = PipelineStepBuilder()
+        self._config["pipeline"].append(builder_func(builder).build())
         return self
 
-    def with_axis(self, name: str, builder_func) -> "ConfigBuilder":
-        """Add an axis using a builder function."""
-        builder = AxisBuilder(name)
-        self._config["axes"][name] = builder_func(builder).build()
-        return self
-
-    def with_axes(self, **axes_configs) -> "ConfigBuilder":
-        """Add multiple axes with simple configurations."""
+    # Convenience method for single-step pipeline (most common case)
+    def single_step(
+        self,
+        template: str,
+        adapter: str = "openai",
+        model: str = "gpt-3.5-turbo",
+        **axes_configs,
+    ) -> "ConfigBuilder":
+        """Create a single-step pipeline with axes."""
+        axes = {}
         for name, config in axes_configs.items():
             if isinstance(config, dict):
-                self._config["axes"][name] = config
+                axes[name] = config
             else:
                 # Assume it's a list for categorical values
-                self._config["axes"][name] = {"type": "categorical", "values": config}
-        return self
+                axes[name] = {"type": "categorical", "values": config}
+
+        return self.add_pipeline_step(
+            template=template, adapter=adapter, model=model, axes=axes
+        )
 
     def with_oracle(self, name: str, builder_func) -> "ConfigBuilder":
         """Add an oracle using a builder function."""
@@ -268,9 +330,8 @@ class ConfigBuilder:
     def minimal(self) -> "ConfigBuilder":
         """Create a minimal valid configuration."""
         return (
-            self.test_id("minimal_test")
-            .prompt_template("Test {{param}}")
-            .with_axis("param", lambda a: a.categorical(["value1", "value2"]))
+            self.spec_id("minimal_test")
+            .single_step(template="Test {{param}}", param=["value1", "value2"])
             .with_oracle(
                 "accuracy",
                 lambda o: o.embedding_similarity(
@@ -282,19 +343,32 @@ class ConfigBuilder:
     def comprehensive(self) -> "ConfigBuilder":
         """Create a comprehensive configuration for complex testing."""
         return (
-            self.test_id("comprehensive_test")
-            .prompt_template("Analyze {{topic}} with {{approach}} methodology")
-            .primary_model(
-                lambda p: p.openai("gpt-4").with_temperature(0.7).with_max_tokens(1000)
+            self.spec_id("comprehensive_test")
+            .add_pipeline_step(
+                template="Analyze {{topic}} with {{approach}} methodology",
+                adapter="openai",
+                model="gpt-4",
+                temperature=0.7,
+                max_tokens=1000,
+                axes={
+                    "topic": {
+                        "type": "categorical",
+                        "values": ["AI", "ML", "DL"],
+                        "weights": [0.4, 0.4, 0.2],
+                    },
+                    "approach": {
+                        "type": "categorical",
+                        "values": ["technical", "business", "academic"],
+                    },
+                    "temperature": {
+                        "type": "truncated_normal",
+                        "mu": 0.7,
+                        "sigma": 0.1,
+                        "min": 0.3,
+                        "max": 0.9,
+                    },
+                },
             )
-            .with_axis(
-                "topic", lambda a: a.categorical(["AI", "ML", "DL"], [0.4, 0.4, 0.2])
-            )
-            .with_axis(
-                "approach",
-                lambda a: a.categorical(["technical", "business", "academic"]),
-            )
-            .with_axis("temperature", lambda a: a.truncated_normal(0.7, 0.1, 0.3, 0.9))
             .with_oracle(
                 "accuracy",
                 lambda o: o.embedding_similarity(
@@ -332,13 +406,14 @@ class ConfigBuilder:
             # Remove required field
             if "oracles" in self._config:
                 del self._config["oracles"]
-        elif error_type == "empty_prompt_id":
-            self._config["prompt_id"] = ""
+        elif error_type == "empty_spec_id":
+            self._config["spec_id"] = ""
         elif error_type == "invalid_axis_type":
             self._config["axes"]["invalid"] = {"type": "invalid_type"}
-        elif error_type == "missing_primary_model":
+        elif error_type == "missing_pipeline":
+            self._config["pipeline"] = []
             if "primary_model" in self._config:
-                del self._config["primary_model"]
+                pass  # Pipeline already empty
         return self
 
     def build(self) -> EvaluationConfig:
@@ -358,15 +433,15 @@ class YamlTemplate:
     """Template strings for common YAML configurations."""
 
     MINIMAL = """
-prompt_id: {prompt_id}
-prompt_template: "{prompt_template}"
-primary_model:
-  adapter: {adapter}
-  model: {model}
-axes:
-  {axis_name}:
-    type: categorical
-    values: {axis_values}
+spec_id: {spec_id}
+pipeline:
+  - template: "{template}"
+    adapter: {adapter}
+    model: {model}
+    axes:
+      {axis_name}:
+        type: categorical
+        values: {axis_values}
 oracles:
   accuracy:
     type: embedding_similarity
@@ -375,16 +450,16 @@ oracles:
 """
 
     WITH_VARIANTS = """
-prompt_id: {prompt_id}
-prompt_template: "{prompt_template}"
-primary_model:
-  adapter: {adapter}
-  model: {model}
+spec_id: {spec_id}
+pipeline:
+  - template: "{template}"
+    adapter: {adapter}
+    model: {model}
+    axes:
+      {axis_name}:
+        type: categorical
+        values: {axis_values}
 n_variants: {n_variants}
-axes:
-  {axis_name}:
-    type: categorical
-    values: {axis_values}
 oracles:
   accuracy:
     type: embedding_similarity
@@ -393,20 +468,20 @@ oracles:
 """
 
     COMPREHENSIVE = """
-prompt_id: {prompt_id}
-prompt_template: "{prompt_template}"
-primary_model:
-  adapter: {adapter}
-  model: {model}
-  temperature: {temperature}
-  max_tokens: {max_tokens}
-axes:
-  param1:
-    type: categorical
-    values: {param1_values}
-  param2:
-    type: categorical
-    values: {param2_values}
+spec_id: {spec_id}
+pipeline:
+  - template: "{template}"
+    adapter: {adapter}
+    model: {model}
+    temperature: {temperature}
+    max_tokens: {max_tokens}
+    axes:
+      param1:
+        type: categorical
+        values: {param1_values}
+      param2:
+        type: categorical
+        values: {param2_values}
 n_variants: {n_variants}
 sampling:
   method: latin_hypercube
@@ -429,8 +504,8 @@ oracles:
     def render(cls, template: str, **kwargs) -> str:
         """Render a template with provided parameters."""
         defaults = {
-            "prompt_id": "test_config",
-            "prompt_template": "Hello {{name}}, this is a test template",
+            "spec_id": "test_config",
+            "template": "Hello {{name}}, this is a test template",
             "adapter": "openai",
             "model": "gpt-3.5-turbo",
             "temperature": 0.7,

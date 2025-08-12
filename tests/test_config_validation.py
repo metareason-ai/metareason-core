@@ -12,7 +12,6 @@ from metareason.config import (
     CustomDistributionConfig,
     CustomOracle,
     EmbeddingSimilarityOracle,
-    EvaluationConfig,
     LLMJudgeOracle,
     Metadata,
     OracleConfig,
@@ -21,6 +20,7 @@ from metareason.config import (
     TruncatedNormalConfig,
     UniformDistributionConfig,
 )
+from tests.fixtures.config_builders import ConfigBuilder
 
 
 class TestEvaluationConfig:
@@ -28,229 +28,209 @@ class TestEvaluationConfig:
 
     def test_valid_evaluation_config(self) -> None:
         """Test that a valid configuration passes validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{name}}, please respond to: {{question}}",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {
-                "name": {"type": "categorical", "values": ["Alice", "Bob", "Charlie"]},
-                "question": {
-                    "type": "categorical",
-                    "values": ["What is 2+2?", "Explain quantum physics"],
+        config = (
+            ConfigBuilder()
+            .spec_id("test_prompt")
+            .add_pipeline_step(
+                template="Hello {{name}}, please respond to: {{question}}",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                axes={
+                    "name": {
+                        "type": "categorical",
+                        "values": ["Alice", "Bob", "Charlie"],
+                    },
+                    "question": {
+                        "type": "categorical",
+                        "values": ["What is 2+2?", "Explain quantum physics"],
+                    },
                 },
-            },
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "The answer should be "
-                    "comprehensive and accurate",
-                    "threshold": 0.85,
-                }
-            },
-        }
+            )
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity(
+                    "The answer should be comprehensive and accurate", threshold=0.85
+                ),
+            )
+            .build()
+        )
 
-        config = EvaluationConfig(**config_data)
-        assert config.prompt_id == "test_prompt"
-        assert len(config.axes) == 2
+        assert config.spec_id == "test_prompt"
+        assert len(config.pipeline) == 1
+        assert len(config.pipeline[0].axes) == 2
         assert config.n_variants == 1000  # default value
 
-    def test_empty_prompt_id_fails(self) -> None:
-        """Test that empty prompt_id fails validation."""
-        config_data = {
-            "prompt_id": "",
-            "prompt_template": "Hello world",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"var": {"type": "categorical", "values": ["a"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
+    def test_empty_spec_id_fails(self) -> None:
+        """Test that empty spec_id fails validation."""
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("")  # Empty spec_id
+                .single_step(template="Hello world", var=["a"])
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
-        assert "Prompt ID cannot be empty" in str(exc_info.value)
+        assert "Spec ID cannot be empty" in str(exc_info.value)
 
-    def test_invalid_prompt_id_format_fails(self) -> None:
-        """Test that invalid prompt_id format fails validation."""
-        config_data = {
-            "prompt_id": "Invalid-Format!",
-            "prompt_template": "Hello world",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"var": {"type": "categorical", "values": ["a"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
+    def test_invalid_spec_id_format_fails(self) -> None:
+        """Test that invalid spec_id format fails validation."""
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("Invalid-Format!")  # Invalid format
+                .single_step(template="Hello world", var=["a"])
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
         error_msg = str(exc_info.value)
         assert "lowercase letters, numbers, and underscores only" in error_msg
         assert "iso_42001_compliance_check" in error_msg
 
-    def test_long_prompt_id_fails(self) -> None:
-        """Test that overly long prompt_id fails validation."""
-        config_data = {
-            "prompt_id": "a" * 101,  # 101 characters
-            "prompt_template": "Hello world",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"var": {"type": "categorical", "values": ["a"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
+    def test_long_spec_id_fails(self) -> None:
+        """Test that overly long spec_id fails validation."""
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("a" * 101)  # 101 characters
+                .single_step(template="Hello world", var=["a"])
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
         assert "too long" in str(exc_info.value)
 
-    def test_empty_prompt_template_fails(self) -> None:
-        """Test that empty prompt template fails validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"var": {"type": "categorical", "values": ["a"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
+    def test_empty_template_fails(self) -> None:
+        """Test that empty template fails validation."""
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .add_pipeline_step(
+                    template="",  # Empty template
+                    adapter="openai",
+                    model="gpt-3.5-turbo",
+                    axes={"var": {"type": "categorical", "values": ["a"]}},
+                )
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
         error_msg = str(exc_info.value)
-        assert "Prompt template cannot be empty" in error_msg
+        assert "Template cannot be empty" in error_msg
         assert "Jinja2 template" in error_msg
 
-    def test_short_prompt_template_fails(self) -> None:
-        """Test that overly short prompt template fails validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hi",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"var": {"type": "categorical", "values": ["a"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
+    def test_short_template_fails(self) -> None:
+        """Test that overly short template fails validation."""
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .add_pipeline_step(
+                    template="Hi",  # Too short
+                    adapter="openai",
+                    model="gpt-3.5-turbo",
+                    axes={"var": {"type": "categorical", "values": ["a"]}},
+                )
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
         assert "too short" in str(exc_info.value)
 
-    def test_empty_schema_fails(self) -> None:
-        """Test that empty schema fails validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello world, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
+    def test_empty_pipeline_fails(self) -> None:
+        """Test that empty pipeline fails validation."""
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .with_params(pipeline=[])  # Empty pipeline
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
         error_msg = str(exc_info.value)
-        assert "Schema cannot be empty" in error_msg or "axes" in error_msg.lower()
-        assert "at least one axis" in error_msg
+        assert "Pipeline cannot be empty" in error_msg
+        assert "at least one pipeline step" in error_msg
 
-    def test_invalid_axis_name_fails(self) -> None:
-        """Test that invalid axis names fail validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{InvalidName}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"InvalidName": {"type": "categorical", "values": ["a"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
+    def test_template_with_no_axes_fails(self) -> None:
+        """Test that template with variables but no axes fails validation."""
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .add_pipeline_step(
+                    template="Hello {{missing_var}}, this is a longer template",
+                    adapter="openai",
+                    model="gpt-3.5-turbo",
+                    axes={},  # No axes defined
+                )
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
         error_msg = str(exc_info.value)
-        assert "lowercase letters, numbers, and underscores" in error_msg
-        assert "persona_clause" in error_msg
+        assert "not defined in axes" in error_msg
+        assert "missing_var" in error_msg
 
     def test_low_n_variants_fails(self) -> None:
         """Test that too few variants fails validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{name}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"name": {"type": "categorical", "values": ["a"]}},
-            "n_variants": 50,
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .single_step(
+                    template="Hello {{name}}, this is a longer template", name=["a"]
+                )
+                .with_variants(50)  # Too low
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
         error_msg = str(exc_info.value)
         assert "greater than or equal to 100" in error_msg
 
     def test_high_n_variants_fails(self) -> None:
         """Test that too many variants fails validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{name}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"name": {"type": "categorical", "values": ["a"]}},
-            "n_variants": 15000,
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .single_step(
+                    template="Hello {{name}}, this is a longer template", name=["a"]
+                )
+                .with_variants(15000)  # Too high
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
         error_msg = str(exc_info.value)
         assert "less than or equal to 10000" in error_msg
@@ -261,51 +241,52 @@ class TestTemplateVariableValidation:
 
     def test_missing_template_variables_fails(self) -> None:
         """Test that missing template variables fail validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{name}} and {{age}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .add_pipeline_step(
+                    template="Hello {{name}} and {{age}}, this is a longer template",
+                    adapter="openai",
+                    model="gpt-3.5-turbo",
+                    axes={
+                        "name": {"type": "categorical", "values": ["Alice"]}
+                    },  # missing 'age'
+                )
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
         error_msg = str(exc_info.value)
-        assert (
-            "not defined in schema" in error_msg or "not defined in axes" in error_msg
-        )
+        assert "not defined in axes" in error_msg
         assert "age" in error_msg
 
-    def test_unused_schema_variables_allowed(self) -> None:
+    def test_unused_axes_variables_allowed(self) -> None:
         """Test that unused axes variables are allowed (just warnings)."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{name}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {
-                "name": {"type": "categorical", "values": ["Alice"]},
-                "unused_var": {"type": "categorical", "values": ["value"]},
-            },
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
         # Should not raise an error
-        config = EvaluationConfig(**config_data)
-        assert config.prompt_id == "test_prompt"
+        config = (
+            ConfigBuilder()
+            .spec_id("test_prompt")
+            .add_pipeline_step(
+                template="Hello {{name}}, this is a longer template",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                axes={
+                    "name": {"type": "categorical", "values": ["Alice"]},
+                    "unused_var": {"type": "categorical", "values": ["value"]},
+                },
+            )
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity("test answer", threshold=0.85),
+            )
+            .build()
+        )
+
+        assert config.spec_id == "test_prompt"
 
 
 class TestCategoricalAxis:
@@ -737,140 +718,152 @@ class TestCrossFieldValidation:
 
     def test_stratified_sampling_validation_passes(self) -> None:
         """Test that valid stratified sampling passes validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{category}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"category": {"type": "categorical", "values": ["A", "B", "C"]}},
-            "sampling": {"method": "latin_hypercube", "stratified_by": ["category"]},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "This is a comprehensive test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
+        config = (
+            ConfigBuilder()
+            .spec_id("test_prompt")
+            .add_pipeline_step(
+                template="Hello {{category}}, this is a longer template",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                axes={"category": {"type": "categorical", "values": ["A", "B", "C"]}},
+            )
+            .with_sampling(method="latin_hypercube", stratified_by=["category"])
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity(
+                    "This is a comprehensive test answer", threshold=0.85
+                ),
+            )
+            .build()
+        )
 
-        config = EvaluationConfig(**config_data)
         assert config.sampling.stratified_by == ["category"]
 
     def test_stratified_sampling_nonexistent_axis_fails(self) -> None:
         """Test that stratified sampling with nonexistent axis fails."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{category}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"category": {"type": "categorical", "values": ["A", "B", "C"]}},
-            "sampling": {
-                "method": "latin_hypercube",
-                "stratified_by": ["nonexistent_axis"],
-            },
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "This is a comprehensive test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .add_pipeline_step(
+                    template="Hello {{category}}, this is a longer template",
+                    adapter="openai",
+                    model="gpt-3.5-turbo",
+                    axes={
+                        "category": {"type": "categorical", "values": ["A", "B", "C"]}
+                    },
+                )
+                .with_sampling(
+                    method="latin_hypercube", stratified_by=["nonexistent_axis"]
+                )
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity(
+                        "This is a comprehensive test answer", threshold=0.85
+                    ),
+                )
+                .build()
+            )
 
         error_msg = str(exc_info.value)
-        assert "not found in schema" in error_msg or "not found in axes" in error_msg
+        assert "not found" in error_msg
 
     def test_stratified_sampling_continuous_axis_fails(self) -> None:
         """Test that stratified sampling with continuous axis fails."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello world, this is a longer template "
-            "with {{temperature}}",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"temperature": {"type": "uniform", "min": 0.0, "max": 1.0}},
-            "sampling": {"method": "latin_hypercube", "stratified_by": ["temperature"]},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "This is a comprehensive test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .add_pipeline_step(
+                    template="Hello world, this is a longer template with {{temperature}}",
+                    adapter="openai",
+                    model="gpt-3.5-turbo",
+                    axes={"temperature": {"type": "uniform", "min": 0.0, "max": 1.0}},
+                )
+                .with_sampling(method="latin_hypercube", stratified_by=["temperature"])
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity(
+                        "This is a comprehensive test answer", threshold=0.85
+                    ),
+                )
+                .build()
+            )
 
         error_msg = str(exc_info.value)
         assert "must be categorical" in error_msg
 
     def test_no_oracles_configured_fails(self) -> None:
         """Test that configuration with no oracles fails validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{name}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
-            "oracles": {},
-        }
-
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .single_step(
+                    template="Hello {{name}}, this is a longer template", name=["Alice"]
+                )
+                .with_params(oracles={})  # No oracles
+                .build()
+            )
 
         error_msg = str(exc_info.value)
         assert "At least one oracle must be configured" in error_msg
 
     def test_statistical_requirements_validation_passes(self) -> None:
         """Test that valid statistical requirements pass validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{category}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {
-                "category": {
-                    "type": "categorical",
-                    "values": ["A", "B"],
-                }  # 2 combinations
-            },
-            "n_variants": 100,  # 100 > 2*10 minimum requirement
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "This is a comprehensive test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
+        config = (
+            ConfigBuilder()
+            .spec_id("test_prompt")
+            .add_pipeline_step(
+                template="Hello {{category}}, this is a longer template",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                axes={
+                    "category": {
+                        "type": "categorical",
+                        "values": ["A", "B"],
+                    }  # 2 combinations
+                },
+            )
+            .with_variants(100)  # 100 > 2*10 minimum requirement
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity(
+                    "This is a comprehensive test answer", threshold=0.85
+                ),
+            )
+            .build()
+        )
 
-        config = EvaluationConfig(**config_data)
         assert config.n_variants == 100
 
     def test_statistical_requirements_validation_fails(self) -> None:
         """Test that insufficient statistical requirements fail validation."""
-        config_data = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{category}} {{type}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {
-                "category": {"type": "categorical", "values": ["A", "B", "C"]},
-                "type": {
-                    "type": "categorical",
-                    "values": ["X", "Y"],
-                },  # 3*2 = 6 combinations
-            },
-            "n_variants": 50,  # This should fail the ge=100 constraint first
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "This is a comprehensive test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("test_prompt")
+                .add_pipeline_step(
+                    template="Hello {{category}} {{type}}, this is a longer template",
+                    adapter="openai",
+                    model="gpt-3.5-turbo",
+                    axes={
+                        "category": {"type": "categorical", "values": ["A", "B", "C"]},
+                        "type": {
+                            "type": "categorical",
+                            "values": ["X", "Y"],
+                        },  # 3*2 = 6 combinations
+                    },
+                )
+                .with_variants(50)  # This should fail the ge=100 constraint first
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity(
+                        "This is a comprehensive test answer", threshold=0.85
+                    ),
+                )
+                .build()
+            )
 
         error_msg = str(exc_info.value)
         # This will fail on the ge=100 constraint first
@@ -911,40 +904,28 @@ class TestErrorMessageQuality:
     def test_error_messages_contain_suggestions(self) -> None:
         """Test that error messages contain helpful suggestions."""
         test_cases = [
-            # (invalid_config, expected_keywords) - mixed custom and built-in validation
+            # (builder_func, expected_keywords)
             (
-                {"prompt_id": "Invalid-Name"},
-                ["Suggestion:", "lowercase letters"],  # Custom validation
+                lambda: (
+                    ConfigBuilder()
+                    .spec_id("Invalid-Name")
+                    .single_step(template="Test template", param=["a"])
+                    .with_oracle(
+                        "accuracy",
+                        lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                    )
+                ),
+                ["lowercase letters"],  # Custom validation
             ),
             (
-                {"prompt_template": ""},
-                ["Suggestion:", "Jinja2 template"],  # Custom validation
-            ),
-            (
-                {"n_variants": 50},
+                lambda: (ConfigBuilder().minimal().with_variants(50)),
                 ["greater than or equal to 100"],  # Built-in Pydantic validation
             ),
         ]
 
-        base_config = {
-            "prompt_id": "test_prompt",
-            "prompt_template": "Hello {{name}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "This is a comprehensive test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
-        for invalid_field, expected_keywords in test_cases:
-            config_data = {**base_config, **invalid_field}
-
+        for builder_func, expected_keywords in test_cases:
             with pytest.raises(ValidationError) as exc_info:
-                EvaluationConfig(**config_data)
+                builder_func().build()
 
             error_msg = str(exc_info.value)
             for keyword in expected_keywords:
@@ -954,24 +935,19 @@ class TestErrorMessageQuality:
 
     def test_field_specific_error_reporting(self) -> None:
         """Test that validation errors are reported for specific fields."""
-        config_data = {
-            "prompt_id": "",  # Invalid
-            "prompt_template": "Hello {{name}}, this is a longer template",
-            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
-            "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
-            "oracles": {
-                "accuracy": {
-                    "type": "embedding_similarity",
-                    "canonical_answer": "This is a comprehensive test answer",
-                    "threshold": 0.85,
-                }
-            },
-        }
-
         with pytest.raises(ValidationError) as exc_info:
-            EvaluationConfig(**config_data)
+            (
+                ConfigBuilder()
+                .spec_id("")  # Invalid empty spec_id
+                .single_step(template="Test template", param=["a"])
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("test answer", threshold=0.85),
+                )
+                .build()
+            )
 
-        # Check that error is specifically attributed to prompt_id field
+        # Check that error is specifically attributed to spec_id field
         error_details = exc_info.value.errors()
         assert len(error_details) >= 1
-        assert any("prompt_id" in str(error.get("loc", [])) for error in error_details)
+        assert any("spec_id" in str(error.get("loc", [])) for error in error_details)
