@@ -197,6 +197,101 @@ oracles:
 - **Coverage**: Maintained at 80%+ with branch coverage
 - **Test Markers**: `slow`, `integration`, `unit` for selective test execution
 
+### Test Infrastructure and Fixtures
+
+The project includes a comprehensive test infrastructure designed to eliminate test brittleness and make configuration changes painless. This infrastructure replaces hardcoded YAML strings with programmatic builders and factories.
+
+#### Test Builders and Factories
+
+**ConfigBuilder**: Fluent API for creating test configurations
+```python
+from tests.fixtures.config_builders import ConfigBuilder
+
+config = (ConfigBuilder()
+    .test_id("my_test")
+    .prompt_template("Analyze {{topic}} with {{method}}")
+    .with_axis("topic", lambda a: a.categorical(["AI", "ML", "DL"]))
+    .with_axis("method", lambda a: a.categorical(["technical", "business"]))
+    .with_oracle("accuracy", lambda o: o.embedding_similarity(
+        "Comprehensive analysis covering key concepts", threshold=0.85
+    ))
+    .with_oracle("explainability", lambda o: o.llm_judge(
+        "Rate quality from 1-5 based on clarity and accuracy"
+    ))
+    .with_variants(1000)
+    .build())
+```
+
+**EvaluationFactory**: Common configuration patterns
+```python
+from tests.factories.evaluation_factory import EvaluationFactory
+
+# Create configurations for common scenarios
+minimal_config = EvaluationFactory.minimal()
+single_axis_config = EvaluationFactory.with_single_axis("topic", ["AI", "ML"])
+multi_axis_config = EvaluationFactory.with_multiple_axes({
+    "name": ["Alice", "Bob"],
+    "style": ["formal", "casual"]
+})
+```
+
+**YamlFileFactory**: Temporary YAML file creation
+```python
+from tests.factories.evaluation_factory import YamlFileFactory
+
+# Create temporary YAML files for CLI testing
+config = EvaluationFactory.minimal()
+temp_path = YamlFileFactory.create_temp_file(config)
+
+# Create invalid configurations for error testing
+invalid_path = YamlFileFactory.create_invalid_file("empty_prompt_id")
+```
+
+#### Schema Migration Support
+
+**Migration Utilities**: Support for schema evolution
+```python
+from tests.helpers.schema_migration import migrate_config_v1_to_v2
+
+# Migrate from current format (v1) to pipeline format (v2)
+v1_config = {"prompt_id": "test", "prompt_template": "Hello {{name}}"}
+v2_config = migrate_config_v1_to_v2(v1_config)
+# Result: {"test_id": "test", "pipeline": [{"type": "template", "template": "Hello {{name}}"}]}
+```
+
+#### Pytest Fixtures
+
+**Available Fixtures**:
+- `config_builder`: ConfigBuilder instance for fluent configuration creation
+- `evaluation_factory`: EvaluationFactory class for common patterns
+- `minimal_config`: Pre-built minimal valid configuration
+- `comprehensive_config`: Pre-built comprehensive configuration
+- `temp_config_file`: Function to create temporary config files
+- `common_axes`: Dictionary of common axis configurations
+- `common_oracles`: Dictionary of common oracle configurations
+
+**Usage Example**:
+```python
+def test_my_feature(config_builder, temp_config_file):
+    # Use builder for custom config
+    config = config_builder.minimal().with_variants(500).build()
+
+    # Create temp file for CLI testing
+    temp_path = temp_config_file(lambda cb: cb.comprehensive())
+
+    # Run your test logic
+    assert config.n_variants == 500
+    assert temp_path.exists()
+```
+
+#### Benefits
+
+- **Eliminates Brittleness**: Schema changes automatically propagate through all tests
+- **Reduces Duplication**: Common configurations defined once, reused everywhere
+- **Improves Maintainability**: Tests focus on behavior, not configuration details
+- **Supports Evolution**: Ready for pipeline-based configuration format migration
+- **Type Safety**: Full Pydantic validation and IDE support
+
 ### Code Quality Standards
 - **Type Hints**: Python type hints for better code clarity
 - **Code Formatting**: Black (88 char line length) + isort
@@ -227,7 +322,9 @@ The project is in active development (v0.1.0) with the following features comple
 - **Oracle framework**: LLM-as-Judge oracle with structured evaluation responses
 - **Privacy utilities**: Data sanitization and privacy-safe logging for sensitive information
 - **Local model support**: Complete Ollama integration for privacy-focused local evaluation
-- **Comprehensive testing**: 30+ test files with 80%+ coverage requirement
+- **Test infrastructure**: Robust ConfigBuilder, factories, and fixtures eliminating test brittleness
+- **Schema migration utilities**: Support for configuration format evolution (v1 to v2 pipeline format)
+- **Comprehensive testing**: 30+ test files with 80%+ coverage requirement and maintainable test patterns
 
 #### 🚧 In Development
 - **Advanced oracle implementations**: Embedding similarity and custom evaluation metrics

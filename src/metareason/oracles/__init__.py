@@ -1,6 +1,7 @@
 """Oracle implementations for evaluation."""
 
 from .base import BaseOracle, OracleError, OracleResult
+from .embedding_similarity import EmbeddingSimilarityOracle
 from .judge_response import (
     BiasDetectionResult,
     BinaryJudgeResponse,
@@ -30,6 +31,7 @@ __all__ = [
     "BiasDetectionResult",
     "CalibrationResult",
     # Oracle implementations
+    "EmbeddingSimilarityOracle",
     "LLMJudgeOracle",
     "JudgeQualityAssurance",
 ]
