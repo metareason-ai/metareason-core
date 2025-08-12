@@ -116,26 +116,219 @@ print(f"Reasoning: {result.metadata['reasoning']}")
 
 ### 2. Embedding Similarity Oracle
 
-Evaluates response accuracy using semantic similarity to canonical answers.
+The embedding similarity oracle evaluates response accuracy using semantic similarity between responses and canonical answers. It converts text into high-dimensional vector representations (embeddings) and computes similarity scores using various mathematical methods.
 
-#### Configuration
+#### Key Features
+
+- **Multiple Similarity Metrics**: Four different similarity calculation methods
+- **High Performance**: Vectorized calculations with NumPy optimization
+- **Batch Processing**: Efficient handling of multiple responses
+- **Parallel Execution**: Configurable worker threads for performance
+- **Distribution Analysis**: Optional detailed similarity insights
+- **Flexible Scoring**: Binary threshold or continuous confidence scores
+- **Adapter Integration**: Works with any configured LLM provider for embeddings
+
+#### Configuration Options
 
 ```yaml
 oracles:
   accuracy:
     type: "embedding_similarity"
-    canonical_answer: "The expected correct answer"
-    method: "cosine_similarity"
-    threshold: 0.88
-    embedding_model: "text-embedding-3-small"
+    canonical_answer: |
+      Comprehensive canonical answer covering all expected response aspects.
+      Should be detailed and include key concepts for accurate evaluation.
+    method: "cosine_similarity"          # Required: similarity calculation method
+    threshold: 0.85                      # Required: similarity threshold (0.0-1.0)
+    embedding_model: "text-embedding-3-small"  # Optional: embedding model
+    embedding_adapter: "openai"          # Optional: LLM adapter for embeddings
+    batch_size: 32                       # Optional: batch processing size (1-1000)
+    use_vectorized: true                 # Optional: enable NumPy optimization
+    parallel_workers: 4                  # Optional: parallel processing threads
+    confidence_passthrough: false       # Optional: raw scores vs binary threshold
+    distribution_analysis: false        # Optional: detailed similarity analysis
 ```
 
-#### Features
+#### Similarity Methods
 
-- **Semantic Understanding**: Captures meaning beyond exact text matches
-- **Multiple Methods**: Cosine similarity, semantic entropy, Euclidean distance
-- **Configurable Thresholds**: Adjust sensitivity for different use cases
-- **Model Selection**: Support for various embedding models
+**1. Cosine Similarity** (default)
+- Measures angle between normalized vectors
+- Range: -1 to 1 (typically 0-1 for positive embeddings)
+- Best for: General semantic similarity, most common choice
+- Formula: `cos(θ) = (A·B) / (||A|| × ||B||)`
+
+**2. Euclidean Distance**
+- Measures geometric distance between vectors
+- Converted to similarity: `1 - (distance / max_distance)`
+- Range: 0 to 1
+- Best for: When magnitude differences matter
+
+**3. Dot Product**
+- Simple vector multiplication sum
+- Range: Unbounded (depends on vector magnitudes)
+- Best for: When both similarity and magnitude are important
+
+**4. Semantic Entropy**
+- Complex similarity using KL divergence approximation
+- Range: 0 to 1
+- Best for: Capturing distributional semantic differences
+- Most computationally expensive but potentially most nuanced
+
+#### Performance Configuration
+
+**Batch Processing:**
+```yaml
+batch_size: 64              # Process 64 embeddings at once
+parallel_workers: 8         # Use 8 threads for similarity calculations
+use_vectorized: true        # Enable NumPy optimization (recommended)
+```
+
+**Memory vs Speed Trade-offs:**
+- **Small batches (1-16)**: Lower memory, good for constrained environments
+- **Medium batches (32-64)**: Balanced performance and memory
+- **Large batches (100+)**: Higher throughput, requires more memory
+
+**Parallel Processing:**
+- **None**: Sequential processing (default)
+- **2-4 workers**: Good for most use cases
+- **8+ workers**: High-performance scenarios with many embeddings
+
+#### Advanced Features
+
+**Confidence Pass-through:**
+```yaml
+confidence_passthrough: true  # Return raw similarity scores (0.0-1.0)
+# vs
+confidence_passthrough: false # Apply binary threshold (0.0 or 1.0)
+```
+
+**Distribution Analysis:**
+```yaml
+distribution_analysis: true
+```
+Provides detailed metadata including:
+- Component-wise similarity statistics (mean, std, min, max)
+- Vector magnitude comparisons
+- Confidence estimates based on vector properties
+- Diagnostic information for debugging similarity calculations
+
+#### Implementation Details
+
+The embedding similarity oracle (`src/metareason/oracles/embedding_similarity.py`) provides:
+
+1. **Mock Embeddings**: Deterministic embeddings for testing and development
+2. **Vectorized Calculations**: NumPy-based optimization with sequential fallback
+3. **Dimension Validation**: Automatic checking for embedding compatibility
+4. **Error Recovery**: Graceful handling of embedding generation failures
+5. **Resource Management**: Proper cleanup of thread pools and adapters
+
+#### Usage Examples
+
+**Basic Accuracy Evaluation:**
+```python
+from metareason.oracles.embedding_similarity import EmbeddingSimilarityOracle
+from metareason.config.oracles import EmbeddingSimilarityConfig
+
+config = EmbeddingSimilarityConfig(
+    canonical_answer="Paris is the capital and largest city of France.",
+    method="cosine_similarity",
+    threshold=0.85
+)
+
+oracle = EmbeddingSimilarityOracle(config, primary_adapter=adapter)
+await oracle.initialize()
+
+result = await oracle.evaluate(
+    response="The capital of France is Paris.",
+    context={}
+)
+
+print(f"Similarity Score: {result.metadata['similarity_score']:.3f}")
+print(f"Pass/Fail: {'PASS' if result.score == 1.0 else 'FAIL'}")
+```
+
+**High-Performance Batch Evaluation:**
+```python
+config = EmbeddingSimilarityConfig(
+    canonical_answer="Detailed canonical answer...",
+    method="cosine_similarity",
+    threshold=0.80,
+    batch_size=64,
+    parallel_workers=8,
+    use_vectorized=True
+)
+
+oracle = EmbeddingSimilarityOracle(config, primary_adapter=adapter)
+await oracle.initialize()
+
+responses = ["Response 1", "Response 2", "Response 3", ...]
+results = await oracle.batch_evaluate(responses, {})
+
+for i, result in enumerate(results):
+    print(f"Response {i+1}: {result.score:.3f}")
+```
+
+**Detailed Analysis Mode:**
+```python
+config = EmbeddingSimilarityConfig(
+    canonical_answer="Comprehensive answer...",
+    method="cosine_similarity",
+    threshold=0.85,
+    confidence_passthrough=True,      # Get raw scores
+    distribution_analysis=True        # Get detailed analysis
+)
+
+result = await oracle.evaluate(response, {})
+
+analysis = result.metadata["distribution_analysis"]
+print(f"Component mean: {analysis['component_mean']:.3f}")
+print(f"Component std: {analysis['component_std']:.3f}")
+print(f"Confidence estimate: {analysis['confidence_estimate']:.3f}")
+```
+
+#### Best Practices
+
+1. **Canonical Answer Design**:
+   - Include all key concepts expected in good responses
+   - Use clear, comprehensive language
+   - Cover edge cases and alternative phrasings
+   - Aim for 2-5 sentences for most use cases
+
+2. **Method Selection**:
+   - **Cosine similarity**: Default choice for most applications
+   - **Euclidean**: When response length/verbosity matters
+   - **Dot product**: When both similarity and emphasis matter
+   - **Semantic entropy**: For research or highly nuanced evaluation
+
+3. **Threshold Tuning**:
+   - **0.70-0.80**: Lenient, good for diverse valid responses
+   - **0.85-0.90**: Standard range for most applications
+   - **0.90-0.95**: Strict, for precise factual questions
+   - **Above 0.95**: Very strict, mainly for exact matches
+
+4. **Performance Optimization**:
+   - Use vectorized calculations when NumPy is available
+   - Batch responses for better throughput
+   - Use parallel workers for CPU-intensive similarity calculations
+   - Consider embedding adapter choice for cost optimization
+
+5. **Local vs Cloud Embeddings**:
+   ```yaml
+   # Cost-optimized with local embeddings
+   embedding_adapter: "ollama"
+   embedding_model: "nomic-embed-text"
+
+   # High-quality cloud embeddings
+   embedding_adapter: "openai"
+   embedding_model: "text-embedding-3-large"
+   ```
+
+#### Error Handling
+
+Common scenarios and recovery mechanisms:
+- **Embedding generation failures**: Automatic retry and error reporting
+- **Dimension mismatches**: Clear error messages with dimension details
+- **Adapter unavailability**: Graceful fallback to primary adapter
+- **Memory limitations**: Automatic batch size adjustment recommendations
 
 ### 3. Statistical Calibration Oracle
 

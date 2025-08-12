@@ -75,12 +75,12 @@ graph TD
 - **Dependencies**: Adapters, Configuration
 - **Key Components**:
   - Oracle interfaces (BaseOracle)
-  - LLM-as-Judge oracle with rubric-based evaluation
-  - Embedding similarity oracle for accuracy assessment
+  - LLM-as-Judge oracle with rubric-based evaluation and robust parsing
+  - Embedding similarity oracle with 4 similarity methods, batch processing, and vectorized calculations
   - Statistical calibration oracle for confidence evaluation
   - Custom oracle support for domain-specific criteria
-  - Robust JSON parsing and fallback mechanisms
   - Multi-judge rotation for bias reduction
+  - Performance optimization with parallel processing and memory management
 
 ### 6. Adapters Module (`metareason.adapters`)
 - **Purpose**: External service integrations
