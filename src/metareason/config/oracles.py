@@ -10,14 +10,38 @@ class EmbeddingSimilarityOracle(BaseModel):
 
     type: Literal["embedding_similarity"] = "embedding_similarity"
     canonical_answer: str = Field(..., description="The expected correct answer")
-    method: Literal["cosine_similarity", "semantic_entropy", "euclidean"] = Field(
-        default="cosine_similarity", description="Similarity calculation method"
-    )
+    method: Literal[
+        "cosine_similarity", "euclidean", "dot_product", "semantic_entropy"
+    ] = Field(default="cosine_similarity", description="Similarity calculation method")
     threshold: float = Field(
         ..., ge=0.0, le=1.0, description="Similarity threshold for pass/fail"
     )
     embedding_model: str = Field(
         default="text-embedding-3-small", description="Embedding model to use"
+    )
+    embedding_adapter: Optional[str] = Field(
+        default=None,
+        description="LLM adapter to use for embedding generation (uses primary model adapter if not specified)",
+    )
+    batch_size: int = Field(
+        default=32, ge=1, le=1000, description="Batch size for embedding processing"
+    )
+    use_vectorized: bool = Field(
+        default=True,
+        description="Use vectorized similarity calculations for performance",
+    )
+    parallel_workers: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=32,
+        description="Number of parallel workers for batch processing",
+    )
+    confidence_passthrough: bool = Field(
+        default=False,
+        description="Pass through confidence scores instead of binary threshold",
+    )
+    distribution_analysis: bool = Field(
+        default=False, description="Include similarity distribution analysis in results"
     )
 
     @field_validator("canonical_answer")
@@ -44,6 +68,32 @@ class EmbeddingSimilarityOracle(BaseModel):
                 f"Threshold must be between 0.0 and 1.0, got {v}. "
                 f"Suggestion: Use a value like 0.85 for similarity "
                 f"matching."
+            )
+        return v
+
+    @field_validator("batch_size")
+    @classmethod
+    def validate_batch_size(cls, v: int) -> int:
+        if v > 100:
+            # Warning for large batch sizes that might cause memory issues
+            pass
+        return v
+
+    @field_validator("parallel_workers")
+    @classmethod
+    def validate_parallel_workers(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v > 16:
+            # Warning for excessive parallelism
+            pass
+        return v
+
+    @field_validator("embedding_adapter")
+    @classmethod
+    def validate_embedding_adapter(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not v.strip():
+            raise ValueError(
+                "Embedding adapter cannot be empty string. "
+                "Suggestion: Use valid adapter name like 'openai' or remove field to use primary adapter."
             )
         return v
 

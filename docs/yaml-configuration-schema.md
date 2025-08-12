@@ -173,15 +173,126 @@ sampling:
 Oracles define the evaluation criteria. Multiple oracle types can be specified:
 
 #### Accuracy Oracle
+
+The embedding similarity oracle performs semantic similarity comparisons between responses and canonical answers using vector embeddings. It supports multiple similarity metrics and performance optimization features.
+
 ```yaml
 oracles:
   accuracy:
     type: "embedding_similarity"
     canonical_answer: |
-      The expected correct answer to the prompt.
-    method: "cosine_similarity"  # Options: cosine_similarity, semantic_entropy, euclidean
-    threshold: 0.90
-    embedding_model: "text-embedding-3-small"  # Optional: specify embedding model
+      The expected correct answer to the prompt. This should be comprehensive
+      and cover all key aspects of a good response for accurate evaluation.
+    method: "cosine_similarity"  # Required: similarity calculation method
+    threshold: 0.90             # Required: similarity threshold for pass/fail (0.0-1.0)
+    embedding_model: "text-embedding-3-small"  # Optional: embedding model (default: text-embedding-3-small)
+    embedding_adapter: "openai"  # Optional: LLM adapter for embeddings (uses primary if not specified)
+    batch_size: 32              # Optional: batch size for processing (default: 32, range: 1-1000)
+    use_vectorized: true        # Optional: use vectorized calculations (default: true)
+    parallel_workers: 4         # Optional: parallel processing workers (default: none, range: 1-32)
+    confidence_passthrough: false  # Optional: pass raw similarity scores instead of binary (default: false)
+    distribution_analysis: false   # Optional: include similarity distribution analysis (default: false)
+```
+
+**Configuration Options:**
+
+- `canonical_answer` (required): Reference text for similarity comparison
+  - **Format**: Multi-line string with comprehensive expected answer
+  - **Requirements**: Must be at least 10 characters, should be detailed and specific
+  - **Best Practice**: Include all key concepts and terminology expected in good responses
+
+- `method` (default: "cosine_similarity"): Similarity calculation method
+  - **cosine_similarity**: Cosine similarity between normalized vectors (most common)
+  - **euclidean**: Euclidean distance converted to similarity score (0-1 range)
+  - **dot_product**: Simple dot product similarity
+  - **semantic_entropy**: Complex similarity using entropy-based measures
+
+- `threshold` (required): Binary classification threshold (0.0-1.0)
+  - **0.70-0.80**: Lenient matching, good for diverse valid responses
+  - **0.85-0.90**: Standard matching for most use cases
+  - **0.90-0.95**: Strict matching for precise factual answers
+  - **Above 0.95**: Very strict, mainly for exact matches
+
+- `embedding_model` (default: "text-embedding-3-small"): Embedding model identifier
+  - **OpenAI**: "text-embedding-3-small", "text-embedding-3-large", "text-embedding-ada-002"
+  - **Provider-specific**: Model names depend on the embedding adapter used
+
+- `embedding_adapter` (optional): LLM adapter for embedding generation
+  - **Default**: Uses primary model adapter if not specified
+  - **Options**: "openai", "anthropic", "ollama", or any configured adapter
+  - **Use Case**: Separate embedding provider from primary model for cost optimization
+
+**Performance Options:**
+
+- `batch_size` (default: 32, range: 1-1000): Number of embeddings to process in each batch
+  - **Small batches (1-16)**: Lower memory usage, good for resource-constrained environments
+  - **Medium batches (32-64)**: Balanced performance and memory usage
+  - **Large batches (100+)**: Higher throughput, requires more memory
+
+- `use_vectorized` (default: true): Enable vectorized similarity calculations
+  - **true**: Use NumPy for faster calculations (recommended)
+  - **false**: Use sequential calculations (fallback when NumPy unavailable)
+
+- `parallel_workers` (default: none, range: 1-32): Parallel processing workers
+  - **none**: Sequential processing (default)
+  - **2-4**: Good for most use cases
+  - **8-16**: High-performance scenarios with many embeddings
+  - **Above 16**: Diminishing returns, may cause overhead
+
+**Advanced Options:**
+
+- `confidence_passthrough` (default: false): Raw similarity score handling
+  - **false**: Apply binary threshold (score becomes 0.0 or 1.0)
+  - **true**: Return raw similarity scores (0.0-1.0 continuous values)
+  - **Use Case**: When you need confidence levels rather than binary classification
+
+- `distribution_analysis` (default: false): Include similarity distribution metadata
+  - **false**: Standard evaluation with basic metadata
+  - **true**: Include component-wise analysis, magnitude comparisons, confidence estimates
+  - **Use Case**: Debugging, research, or when you need detailed similarity insights
+
+**Example Configurations:**
+
+*Basic Accuracy Oracle:*
+```yaml
+oracles:
+  accuracy:
+    type: "embedding_similarity"
+    canonical_answer: "Paris is the capital and largest city of France."
+    method: "cosine_similarity"
+    threshold: 0.85
+```
+
+*High-Performance Oracle with Analysis:*
+```yaml
+oracles:
+  accuracy:
+    type: "embedding_similarity"
+    canonical_answer: |
+      Machine learning is a subset of artificial intelligence that focuses on
+      algorithms that can learn and make predictions from data without being
+      explicitly programmed for each specific task.
+    method: "cosine_similarity"
+    threshold: 0.80
+    embedding_model: "text-embedding-3-large"
+    batch_size: 64
+    parallel_workers: 8
+    use_vectorized: true
+    confidence_passthrough: true
+    distribution_analysis: true
+```
+
+*Cost-Optimized Oracle with Local Embeddings:*
+```yaml
+oracles:
+  accuracy:
+    type: "embedding_similarity"
+    canonical_answer: "Detailed expected answer here..."
+    method: "euclidean"
+    threshold: 0.75
+    embedding_adapter: "ollama"  # Use local model for embeddings
+    embedding_model: "nomic-embed-text"
+    batch_size: 16
 ```
 
 #### LLM-as-Judge Oracle
