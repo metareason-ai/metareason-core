@@ -35,6 +35,10 @@ class PrimaryModelConfig(BaseModel):
         default=None, ge=-2.0, le=2.0, description="Presence penalty"
     )
     stop: Optional[List[str]] = Field(default=None, description="Stop sequences")
+    json_schema: Optional[str] = Field(
+        default=None,
+        description="Relative path to JSON schema file for structured output",
+    )
 
     @field_validator("adapter")
     @classmethod
@@ -64,6 +68,27 @@ class PrimaryModelConfig(BaseModel):
         if not v or not v.strip():
             raise ValueError("Model name cannot be empty")
         return v.strip()
+
+    @field_validator("json_schema")
+    @classmethod
+    def validate_json_schema_path(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = v.strip()
+            if not v:
+                raise ValueError("JSON schema path cannot be empty string")
+
+            # Basic validation for relative path format
+            if v.startswith("/") or ":" in v:
+                raise ValueError(
+                    f"JSON schema path '{v}' must be a relative path. "
+                    f"Use paths like 'schemas/response_format.json'"
+                )
+
+            # Ensure it ends with .json
+            if not v.endswith(".json"):
+                raise ValueError(f"JSON schema path '{v}' must end with '.json'")
+
+        return v
 
 
 class DomainContext(BaseModel):

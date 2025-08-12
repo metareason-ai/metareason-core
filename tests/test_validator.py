@@ -129,6 +129,9 @@ class TestValidateYamlFile:
         yaml_content = """
 prompt_id: ""
 prompt_template: "test"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   test:
     type: categorical
@@ -153,6 +156,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param:
     type: categorical
@@ -177,6 +183,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param1}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param1:
     type: categorical
@@ -205,6 +214,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param1}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param1:
     type: categorical
@@ -233,6 +245,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{many_values}} and {{few_values}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   many_values:
     type: categorical
@@ -268,6 +283,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param1}} and {{param2}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param1:
     type: categorical
@@ -300,6 +318,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param1}} and {{param2}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param1:
     type: categorical
@@ -332,6 +353,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param:
     type: categorical
@@ -357,6 +381,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param:
     type: categorical
@@ -382,6 +409,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param:
     type: categorical
@@ -407,6 +437,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param:
     type: categorical
@@ -435,6 +468,9 @@ metadata:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param:
     type: categorical
@@ -495,6 +531,9 @@ class TestValidateYamlDirectory:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param:
     type: categorical
@@ -519,6 +558,9 @@ oracles:
         valid_yaml = """
 prompt_id: valid_config
 prompt_template: "Test {{param}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param:
     type: categorical
@@ -563,6 +605,9 @@ oracles:
         yaml_content = """
 prompt_id: test_config
 prompt_template: "Test {{param1}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   param1:
     type: categorical

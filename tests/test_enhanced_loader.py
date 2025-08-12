@@ -27,6 +27,9 @@ class TestEnhancedLoader:
                 """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -60,6 +63,9 @@ oracles:
                 """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -104,6 +110,9 @@ accuracy:
                 f"""
 prompt_id: test_with_includes
 prompt_template: "Hello {{{{name}}}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -125,6 +134,9 @@ oracles: !include {included_file.name}
                 """
 prompt_id: ${PROMPT_ID}
 prompt_template: "Hello ${NAME:World}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -200,6 +212,9 @@ oracles:
                 """
 prompt_id: search_path_test
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -258,6 +273,9 @@ oracles:
                 """
 prompt_id: fallback_test
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -314,6 +332,9 @@ missing_closing_bracket: true
                 """
 prompt_id: config1
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -331,6 +352,9 @@ oracles:
                 """
 prompt_id: config2
 prompt_template: "Hi {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -363,6 +387,9 @@ oracles:
                 """
 prompt_id: valid_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -381,6 +408,9 @@ oracles:
                 """
 prompt_id: ""  # Invalid empty prompt_id
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -410,6 +440,9 @@ class TestPathResolution:
                 """
 prompt_id: absolute_path
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -446,6 +479,9 @@ oracles:
                     """
 prompt_id: relative_path
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -477,6 +513,9 @@ oracles:
                 """
 prompt_id: from_search1
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -496,6 +535,9 @@ oracles:
                 """
 prompt_id: from_search2
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical

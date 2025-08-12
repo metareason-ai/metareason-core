@@ -42,6 +42,7 @@ primary_model:
   frequency_penalty: 0.0        # Optional: frequency penalty (-2.0-2.0)
   presence_penalty: 0.0         # Optional: presence penalty (-2.0-2.0)
   stop: ["END", "STOP"]         # Optional: stop sequences
+  json_schema: "schemas/basic_response.json"  # Optional: path to JSON schema for structured output
 ```
 
 **Configuration Options:**
@@ -65,15 +66,25 @@ primary_model:
 
 - Optional parameters: `max_tokens`, `top_p`, `frequency_penalty`, `presence_penalty`, `stop` sequences follow standard LLM API conventions
 
+- `json_schema` (optional): Relative path to a JSON schema file that defines the expected structure of model responses
+  - **Path Format**: Must be relative to the working directory (e.g., "schemas/response_format.json")
+  - **Provider Support**: Different providers handle structured output differently:
+    - **OpenAI**: Native structured output with 100% schema compliance (gpt-4o models)
+    - **Google**: Native response_schema support (Gemini 1.5+ models)
+    - **Anthropic**: Enhanced system prompts with schema instructions
+    - **Others**: Schema instructions added to prompts
+  - **File Format**: Standard JSON Schema format with type definitions and constraints
+
 **Example Configurations:**
 
-*OpenAI GPT-4:*
+*OpenAI GPT-4 with Structured Output:*
 ```yaml
 primary_model:
   adapter: "openai"
-  model: "gpt-4"
+  model: "gpt-4o"  # Use gpt-4o models for native structured output
   temperature: 0.7
   max_tokens: 2000
+  json_schema: "schemas/basic_response.json"
 ```
 
 *Local Ollama Model:*
@@ -83,6 +94,7 @@ primary_model:
   model: "llama3"
   temperature: 0.5
   max_tokens: 1000
+  json_schema: "schemas/multi_dimensional.json"  # Schema added to prompts
 ```
 
 *Anthropic Claude:*
@@ -92,6 +104,17 @@ primary_model:
   model: "claude-3-sonnet-20240229"
   temperature: 0.3
   max_tokens: 1500
+  json_schema: "schemas/binary_classification.json"  # Enhanced system prompts
+```
+
+*Google Gemini with Native Schema:*
+```yaml
+primary_model:
+  adapter: "google"
+  model: "gemini-2.0-flash-001"
+  temperature: 0.5
+  max_tokens: 1500
+  json_schema: "schemas/detailed_analysis.json"  # Native response_schema
 ```
 
 ### Schema Object
@@ -264,7 +287,7 @@ oracles:
   custom_metric:
     type: "custom"
     module: "metareason.oracles.finance"
-    class: "RegulatoryComplianceOracle"
+    class_name: "RegulatoryComplianceOracle"
     config:
       frameworks: ["SOX", "GDPR", "MiFID II"]
 ```
@@ -393,7 +416,7 @@ oracles:
   regulatory_alignment:
     type: "custom"
     module: "metareason.oracles.compliance"
-    class: "ISOComplianceOracle"
+    class_name: "ISOComplianceOracle"
     config:
       standard: "ISO42001:2023"
       check_clauses: ["5.1", "6.1", "7.3", "8.1", "9.1"]
@@ -462,6 +485,83 @@ statistical_config:
    - Tag releases that correspond to production evaluations
    - Use branches for experimental prompt variations
 
+## JSON Schema Integration
+
+MetaReason supports structured output through JSON Schema files that define the expected format of model responses. This enables reliable, parseable outputs from LLMs.
+
+### Schema File Format
+
+Schema files must be valid JSON Schema documents placed in a `schemas/` directory relative to your configuration file:
+
+```
+project/
+├── config.yaml
+├── schemas/
+│   ├── basic_response.json
+│   ├── multi_dimensional.json
+│   └── binary_classification.json
+```
+
+### Example Schema Files
+
+**Basic Response Schema (`schemas/basic_response.json`):**
+```json
+{
+  "type": "object",
+  "properties": {
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Evaluation score between 0 and 1"
+    },
+    "reasoning": {
+      "type": "string",
+      "description": "Explanation of the evaluation score",
+      "minLength": 10
+    }
+  },
+  "required": ["score", "reasoning"],
+  "additionalProperties": false
+}
+```
+
+**Multi-Dimensional Schema (`schemas/multi_dimensional.json`):**
+```json
+{
+  "type": "object",
+  "properties": {
+    "overall_score": {"type": "number", "minimum": 0, "maximum": 1},
+    "dimensions": {
+      "type": "object",
+      "properties": {
+        "accuracy": {"type": "number", "minimum": 0, "maximum": 1},
+        "clarity": {"type": "number", "minimum": 0, "maximum": 1},
+        "completeness": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "required": ["accuracy", "clarity", "completeness"]
+    },
+    "reasoning": {"type": "string", "minLength": 20}
+  },
+  "required": ["overall_score", "dimensions", "reasoning"]
+}
+```
+
+### Provider-Specific Behavior
+
+- **OpenAI (gpt-4o models)**: Uses native `response_format` with 100% schema compliance
+- **Google (Gemini 1.5+)**: Uses native `response_schema` with OpenAPI 3.0 format
+- **Anthropic (All models)**: Enhances system prompt with schema instructions
+- **Ollama/Others**: Adds schema format instructions to prompts
+
+### Schema Validation
+
+The framework automatically:
+1. Loads and validates schema files at startup
+2. Converts schemas to provider-specific formats
+3. Handles graceful fallback when schemas are invalid
+4. Logs warnings for unsupported providers
+
 ## Validation Rules
 
 1. **Required Fields**: `prompt_id`, `prompt_template`, `primary_model`, `schema`, and `oracles` must be present
@@ -487,6 +587,7 @@ statistical_config:
    - temperature must be between 0.0 and 2.0
    - top_p must be between 0.0 and 1.0
    - max_tokens must be positive integer
+   - json_schema must be a relative path ending with '.json' (if provided)
 
 ## Future Extensions (v2.0)
 

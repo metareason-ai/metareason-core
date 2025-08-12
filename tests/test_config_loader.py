@@ -15,6 +15,9 @@ def test_load_valid_yaml_config(tmp_path):
     yaml_content = """
 prompt_id: test_evaluation
 prompt_template: "Analyze {{topic}} with {{style}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 schema:
   topic:
     type: categorical
@@ -50,6 +53,9 @@ def test_load_yaml_with_statistical_config(tmp_path):
     yaml_content = """
 prompt_id: test_with_stats
 prompt_template: "Test {{param}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 schema:
   param:
     type: uniform
@@ -87,6 +93,9 @@ def test_validate_yaml_string():
     yaml_content = """
 prompt_id: string_test
 prompt_template: "Do {{action}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 schema:
   action:
     type: categorical
@@ -113,6 +122,9 @@ def test_load_yaml_configs_directory(tmp_path):
         "config1.yaml": """
 prompt_id: eval_1
 prompt_template: "Test {{x}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 schema:
   x:
     type: categorical
@@ -126,6 +138,9 @@ oracles:
         "config2.yml": """
 prompt_id: eval_2
 prompt_template: "Check {{y}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 schema:
   y:
     type: beta
@@ -156,6 +171,9 @@ def test_validation_report(tmp_path):
     yaml_content = """
 prompt_id: test_validation
 prompt_template: "Analyze {{topic}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 schema:
   topic:
     type: categorical
@@ -187,6 +205,9 @@ def test_invalid_yaml_syntax(tmp_path):
     yaml_content = """
 prompt_id: invalid
 prompt_template: "Test"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 schema:
   - invalid list instead of dict
 """
@@ -205,6 +226,9 @@ def test_missing_required_fields(tmp_path):
     """Test validation of missing required fields."""
     yaml_content = """
 prompt_template: "Test {{x}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 schema:
   x:
     type: categorical
@@ -226,6 +250,9 @@ def test_all_distribution_types(tmp_path):
     yaml_content = """
 prompt_id: all_distributions
 prompt_template: "Test {{cat}} {{truncnorm}} {{beta}} {{uniform}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 schema:
   cat:
     type: categorical

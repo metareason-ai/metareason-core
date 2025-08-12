@@ -1,6 +1,14 @@
 # Ollama Quick Start Configuration
 # Minimal setup for local model evaluation
 
+# Primary Model Configuration
+primary_model:
+  adapter: ollama
+  model: llama3
+  temperature: 0.7
+  max_tokens: 1000
+  json_schema: "schemas/basic_response.json"
+
 adapters:
   default_adapter: ollama
 

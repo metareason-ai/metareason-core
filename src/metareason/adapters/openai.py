@@ -20,6 +20,7 @@ from .base import (
     RateLimitError,
     StreamChunk,
 )
+from .schema_utils import convert_schema_for_openai
 
 logger = logging.getLogger(__name__)
 
@@ -28,18 +29,72 @@ class OpenAIAdapter(LLMAdapter):
     """Adapter for OpenAI API."""
 
     SUPPORTED_MODELS = {
-        # GPT-4 models
-        "gpt-4-turbo-preview": {"context": 128000, "max_output": 4096},
-        "gpt-4-turbo": {"context": 128000, "max_output": 4096},
-        "gpt-4": {"context": 8192, "max_output": 4096},
-        "gpt-4-32k": {"context": 32768, "max_output": 4096},
-        "gpt-4-1106-preview": {"context": 128000, "max_output": 4096},
-        "gpt-4-0125-preview": {"context": 128000, "max_output": 4096},
-        # GPT-3.5 models
-        "gpt-3.5-turbo": {"context": 16385, "max_output": 4096},
-        "gpt-3.5-turbo-16k": {"context": 16385, "max_output": 4096},
-        "gpt-3.5-turbo-1106": {"context": 16385, "max_output": 4096},
-        "gpt-3.5-turbo-0125": {"context": 16385, "max_output": 4096},
+        # GPT-4o models (with structured output support)
+        "gpt-4o": {"context": 128000, "max_output": 4096, "structured_output": True},
+        "gpt-4o-2024-08-06": {
+            "context": 128000,
+            "max_output": 16384,
+            "structured_output": True,
+        },
+        "gpt-4o-2024-11-20": {
+            "context": 128000,
+            "max_output": 16384,
+            "structured_output": True,
+        },
+        "gpt-4o-mini": {
+            "context": 128000,
+            "max_output": 16384,
+            "structured_output": True,
+        },
+        "gpt-4o-mini-2024-07-18": {
+            "context": 128000,
+            "max_output": 16384,
+            "structured_output": True,
+        },
+        # GPT-4 models (no structured output)
+        "gpt-4-turbo-preview": {
+            "context": 128000,
+            "max_output": 4096,
+            "structured_output": False,
+        },
+        "gpt-4-turbo": {
+            "context": 128000,
+            "max_output": 4096,
+            "structured_output": False,
+        },
+        "gpt-4": {"context": 8192, "max_output": 4096, "structured_output": False},
+        "gpt-4-32k": {"context": 32768, "max_output": 4096, "structured_output": False},
+        "gpt-4-1106-preview": {
+            "context": 128000,
+            "max_output": 4096,
+            "structured_output": False,
+        },
+        "gpt-4-0125-preview": {
+            "context": 128000,
+            "max_output": 4096,
+            "structured_output": False,
+        },
+        # GPT-3.5 models (no structured output)
+        "gpt-3.5-turbo": {
+            "context": 16385,
+            "max_output": 4096,
+            "structured_output": False,
+        },
+        "gpt-3.5-turbo-16k": {
+            "context": 16385,
+            "max_output": 4096,
+            "structured_output": False,
+        },
+        "gpt-3.5-turbo-1106": {
+            "context": 16385,
+            "max_output": 4096,
+            "structured_output": False,
+        },
+        "gpt-3.5-turbo-0125": {
+            "context": 16385,
+            "max_output": 4096,
+            "structured_output": False,
+        },
     }
 
     def __init__(
@@ -124,6 +179,18 @@ class OpenAIAdapter(LLMAdapter):
         """
         return [{"role": msg.role.value, "content": msg.content} for msg in messages]
 
+    def _supports_structured_output(self, model: str) -> bool:
+        """Check if a model supports native structured output.
+
+        Args:
+            model: Model identifier
+
+        Returns:
+            True if model supports structured output
+        """
+        model_info = self.SUPPORTED_MODELS.get(model, {})
+        return model_info.get("structured_output", False)
+
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
         """Generate completion using OpenAI API.
 
@@ -167,6 +234,21 @@ class OpenAIAdapter(LLMAdapter):
             completion_kwargs["presence_penalty"] = request.presence_penalty
         if request.stop:
             completion_kwargs["stop"] = request.stop
+
+        # Add structured output support
+        if request.json_schema_data and self._supports_structured_output(model):
+            try:
+                response_format = convert_schema_for_openai(request.json_schema_data)
+                completion_kwargs["response_format"] = response_format
+                logger.debug(f"Using native structured output for model {model}")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to set up structured output, falling back to regular completion: {e}"
+                )
+        elif request.json_schema_data:
+            logger.info(
+                f"Model {model} does not support native structured output, schema will be ignored"
+            )
 
         # Make API request
         try:
@@ -263,6 +345,24 @@ class OpenAIAdapter(LLMAdapter):
             completion_kwargs["presence_penalty"] = request.presence_penalty
         if request.stop:
             completion_kwargs["stop"] = request.stop
+
+        # Add structured output support
+        if request.json_schema_data and self._supports_structured_output(model):
+            try:
+                response_format = convert_schema_for_openai(request.json_schema_data)
+                completion_kwargs["response_format"] = response_format
+                logger.debug(
+                    f"Using native structured output for streaming model {model}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to set up structured output for streaming, "
+                    f"falling back to regular completion: {e}"
+                )
+        elif request.json_schema_data:
+            logger.info(
+                f"Model {model} does not support native structured output, schema will be ignored in streaming"
+            )
 
         # Make streaming API request
         try:

@@ -1,0 +1,63 @@
+{
+  "type": "object",
+  "properties": {
+    "overall_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Overall evaluation score"
+    },
+    "dimensions": {
+      "type": "object",
+      "properties": {
+        "accuracy": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Factual accuracy score"
+        },
+        "clarity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Clarity and understandability score"
+        },
+        "completeness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Completeness of the response"
+        },
+        "relevance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Relevance to the question"
+        }
+      },
+      "required": ["accuracy", "clarity", "completeness", "relevance"],
+      "additionalProperties": false
+    },
+    "reasoning": {
+      "type": "string",
+      "description": "Overall reasoning for the evaluation",
+      "minLength": 20
+    },
+    "strengths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of identified strengths"
+    },
+    "weaknesses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of identified weaknesses"
+    }
+  },
+  "required": ["overall_score", "dimensions", "reasoning"],
+  "additionalProperties": false
+}
