@@ -314,6 +314,7 @@ def sample_config():
     config_data = {
         "prompt_id": "test_prompt",
         "prompt_template": "Hello {{name}}, this is a test template",
+        "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
         "axes": {
             "name": {"type": "categorical", "values": ["Alice", "Bob", "Charlie"]}
         },

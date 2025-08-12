@@ -10,29 +10,30 @@ from click.testing import CliRunner
 
 from metareason.cli.config import config_group
 
+from .factories.evaluation_factory import EvaluationFactory, YamlFileFactory
+from .fixtures.config_builders import ConfigBuilder
+
 
 class TestConfigValidateCommand:
     """Test the config validate command."""
 
     def test_validate_single_file_valid(self):
         """Test validating a single valid configuration file."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(
-                """
-prompt_id: test_config
-prompt_template: "Hello {{name}}, this is a test template"
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob", "Charlie"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
+        config = (
+            ConfigBuilder()
+            .test_id("test_config")
+            .prompt_template("Hello {{name}}, this is a test template")
+            .with_axis("name", lambda a: a.categorical(["Alice", "Bob", "Charlie"]))
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity(
+                    "This is a comprehensive test answer for validation", threshold=0.8
+                ),
             )
-            temp_path = Path(f.name)
+            .build()
+        )
+
+        temp_path = YamlFileFactory.create_temp_file(config)
 
         try:
             runner = CliRunner()
@@ -45,23 +46,7 @@ oracles:
 
     def test_validate_single_file_invalid(self):
         """Test validating a single invalid configuration file."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(
-                """
-prompt_id: ""  # Invalid empty prompt_id
-prompt_template: "Hello {{name}}"
-axes:
-  name:
-    type: categorical
-    values: ["Alice"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
-            temp_path = Path(f.name)
+        temp_path = YamlFileFactory.create_invalid_file("empty_prompt_id")
 
         try:
             runner = CliRunner()
@@ -78,40 +63,15 @@ oracles:
             temp_path = Path(temp_dir)
 
             # Create valid config
-            valid_config = temp_path / "valid.yaml"
-            valid_config.write_text(
-                """
-prompt_id: valid_config
-prompt_template: "Hello {{name}}, this is a test template"
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
+            valid_config = EvaluationFactory.minimal(prompt_id="valid_config")
+            valid_path = YamlFileFactory.create_temp_file(valid_config, suffix=".yaml")
+            (temp_path / "valid.yaml").write_text(valid_path.read_text())
+            valid_path.unlink()  # Clean up original temp file
 
             # Create invalid config
-            invalid_config = temp_path / "invalid.yaml"
-            invalid_config.write_text(
-                """
-prompt_id: ""  # Invalid
-prompt_template: "Hello {{name}}"
-axes:
-  name:
-    type: categorical
-    values: ["Alice"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
-            )
+            invalid_path = YamlFileFactory.create_invalid_file("empty_prompt_id")
+            (temp_path / "invalid.yaml").write_text(invalid_path.read_text())
+            invalid_path.unlink()  # Clean up original temp file
 
             runner = CliRunner()
             result = runner.invoke(config_group, ["validate", "-d", str(temp_path)])
@@ -126,6 +86,9 @@ oracles:
                 """
 prompt_id: test_config
 prompt_template: "Hello {{name}}, this is a test template"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -156,26 +119,23 @@ oracles:
 
     def test_validate_strict_mode(self):
         """Test validation in strict mode."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(
-                """
-prompt_id: test_config
-prompt_template: "Hello {{name}}, this is a test template"
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-  unused_axis:  # This will trigger warning in normal mode, error in strict
-    type: categorical
-    values: ["X", "Y"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "This is a comprehensive test answer for validation"
-    threshold: 0.8
-"""
+        # Create config with unused axis to trigger warnings/errors
+        config = (
+            ConfigBuilder()
+            .test_id("test_config")
+            .prompt_template("Hello {{name}}, this is a test template")
+            .with_axis("name", lambda a: a.categorical(["Alice", "Bob"]))
+            .with_axis("unused_axis", lambda a: a.categorical(["X", "Y"]))
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity(
+                    "This is a comprehensive test answer for validation", threshold=0.8
+                ),
             )
-            temp_path = Path(f.name)
+            .build()
+        )
+
+        temp_path = YamlFileFactory.create_temp_file(config)
 
         try:
             runner = CliRunner()
@@ -224,6 +184,9 @@ oracles:
                     """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -260,6 +223,9 @@ oracles:
                     """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -303,6 +269,9 @@ oracles:
                 """
 prompt_id: test_config
 prompt_template: "Hello {{name}}, this is a test template"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -358,6 +327,9 @@ class TestConfigShowCommand:
                 """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -388,6 +360,9 @@ oracles:
                 """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -433,6 +408,9 @@ shared_value: "from included file"
                 f"""
 prompt_id: test_with_includes
 prompt_template: "Hello {{{{name}}}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -461,6 +439,9 @@ oracles:
                 """
 prompt_id: ${TEST_PROMPT_ID:default_id}
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -504,6 +485,9 @@ oracles:
                 """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -545,6 +529,9 @@ oracles:
                 """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -591,6 +578,9 @@ oracles:
                 """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -644,6 +634,9 @@ class TestConfigDiffCommand:
         config_content = """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -682,6 +675,9 @@ oracles:
                 """
 prompt_id: config1
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 1000
 axes:
   name:
@@ -701,6 +697,9 @@ oracles:
                 """
 prompt_id: config2
 prompt_template: "Hi {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 2000
 axes:
   name:
@@ -755,6 +754,9 @@ oracles:
                 """
 prompt_id: config2
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 2000
 schema:
   name:
@@ -796,6 +798,9 @@ oracles:
                 """
 prompt_id: same_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 1000
 schema:
   name:
@@ -819,6 +824,9 @@ metadata:
                 """
 prompt_id: same_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 1000
 schema:
   name:
@@ -863,6 +871,9 @@ metadata:
                 """
 prompt_id: config1
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -900,6 +911,9 @@ oracles:
                 """
 prompt_id: config1
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -942,6 +956,9 @@ oracles:
                 """
 prompt_id: config1
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 1000
 axes:
   name:
@@ -961,6 +978,9 @@ oracles:
                 """
 prompt_id: config2
 prompt_template: "Hi {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 2000
 axes:
   name:
@@ -998,6 +1018,9 @@ oracles:
                 """
 prompt_id: config1
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -1016,6 +1039,9 @@ oracles:
                 """
 prompt_id: config2
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -1200,6 +1226,9 @@ class TestConfigCommandIntegration:
                 """
 prompt_id: integration_test
 prompt_template: "Hello {{name}}, this is a test template"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -1234,6 +1263,9 @@ oracles:
                 """
 prompt_id: cache_test
 prompt_template: "Hello {{name}}, this is a test template"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical

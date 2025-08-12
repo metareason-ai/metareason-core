@@ -1,45 +1,18 @@
 # Google Gemini Quickstart Configuration
 # This example demonstrates using Google Gemini models for LLM evaluation
 
-name: "Google Gemini Quickstart Evaluation"
-description: "Quick evaluation using Google Gemini 2.0 Flash model with simple prompt variations"
+prompt_id: "google_gemini_quickstart_evaluation"
 
-# Adapter Configuration
-adapters:
-  default_adapter: gemini_flash
-  adapters:
-    # Gemini Developer API (free tier available)
-    gemini_flash:
-      type: google
-      api_key_env: GOOGLE_API_KEY  # Set your API key in environment
-      default_model: gemini-2.0-flash-001
-      timeout: 30.0
-      rate_limit:
-        requests_per_minute: 60
-        concurrent_requests: 5
-      retry:
-        max_retries: 3
-        initial_delay: 1.0
-        max_delay: 60.0
-
-    # Alternative: Vertex AI endpoint (for enterprise use)
-    gemini_vertex:
-      type: google
-      use_vertex_ai: true
-      project_id: "your-gcp-project"  # Replace with your GCP project ID
-      location: "us-central1"
-      default_model: gemini-1.5-pro
-      timeout: 30.0
-      rate_limit:
-        requests_per_minute: 300
-        concurrent_requests: 10
-      retry:
-        max_retries: 3
-        initial_delay: 1.0
-        max_delay: 60.0
+# Primary Model Configuration
+primary_model:
+  adapter: google
+  model: gemini-2.0-flash-001
+  temperature: 0.5
+  max_tokens: 1500
+  json_schema: "schemas/multi_dimensional.json"
 
 # Prompt Template
-template: |
+prompt_template: |
   You are evaluating the quality of reasoning in responses to questions about {{topic}}.
 
   Question: {{question}}
@@ -78,101 +51,30 @@ schema:
 
 # Sampling Configuration
 sampling:
-  strategy: latin_hypercube
-  num_samples: 15  # Small sample for quick testing
-  optimization:
-    criterion: maximin  # Maximize minimum distance between points
-    iterations: 100
+  method: latin_hypercube
+  optimization_criterion: maximin
+  random_seed: 42
+
+n_variants: 100
 
 # Oracle Configuration - How to evaluate the LLM responses
 oracles:
-  # Primary oracle: LLM-as-Judge using the same Google model
-  reasoning_quality:
+  explainability:
     type: llm_judge
-    adapter: gemini_flash
-    model: gemini-1.5-flash  # Use a different model for evaluation
-    weight: 1.0
+    rubric: |
+      Rate the response as passing (1) if it meets these criteria:
+      1. Demonstrates clear logical coherence and structure
+      2. Shows depth of analysis and insight appropriate to the topic
+      3. Considers multiple perspectives where relevant
+      4. Uses appropriate evidence and examples
+      5. Provides clear explanation for the reasoning style requested
+    judge_model: gemini-1.5-flash
+    temperature: 0.0
+    output_format: binary
 
-    system_prompt: |
-      You are an expert evaluator assessing the quality of reasoning in AI responses.
-
-      Evaluate the response on these criteria:
-      1. Logical coherence and structure
-      2. Depth of analysis and insight
-      3. Consideration of multiple perspectives
-      4. Quality of evidence and examples
-      5. Clarity of explanation
-
-      Rate each criterion from 1-5 (5 being excellent) and provide an overall score.
-
-      Response format:
-      {
-        "logical_coherence": <score>,
-        "depth_of_analysis": <score>,
-        "multiple_perspectives": <score>,
-        "evidence_quality": <score>,
-        "explanation_clarity": <score>,
-        "overall_score": <average_score>,
-        "reasoning": "<brief explanation of scores>"
-      }
-
-    user_prompt: |
-      Original Question: {{question}}
-      Topic: {{topic}}
-      Expected Reasoning Style: {{reasoning_style}}
-
-      AI Response to Evaluate:
-      {{response}}
-
-      Please evaluate this response according to the criteria above.
-
-  # Secondary oracle: Response length and structure analysis
-  response_structure:
-    type: quality_assurance
-    weight: 0.3
-
-    checks:
-      - name: "adequate_length"
-        description: "Response should be substantial (200-1000 words)"
-        threshold: 200
-        metric: "word_count"
-
-      - name: "paragraph_structure"
-        description: "Response should have clear paragraph breaks"
-        threshold: 2
-        metric: "paragraph_count"
-
-      - name: "question_relevance"
-        description: "Response should address the question directly"
-        metric: "contains_keywords"
-        keywords: ["because", "therefore", "however", "consider", "analysis"]
-
-# Statistical Analysis Configuration
-statistics:
-  confidence_level: 0.95
-  bootstrap_samples: 1000
-  convergence_threshold: 0.01
-
-  # Bayesian analysis settings
-  bayesian:
-    prior_type: "uniform"
-    mcmc_samples: 2000
-    warmup_samples: 1000
-    chains: 2
-
-# Output Configuration
-output:
-  format: "json"
-  include_raw_responses: true
-  include_oracle_details: true
-  visualizations:
-    - type: "score_distribution"
-    - type: "parameter_correlation"
-    - type: "confidence_intervals"
-
-# Execution Settings
-execution:
-  max_concurrent: 5  # Respect rate limits
-  timeout: 300  # 5 minutes total timeout
-  retry_failed: true
-  save_intermediate: true
+metadata:
+  version: "1.0.0"
+  created_by: "demo@metareason.ai"
+  created_date: "2024-12-10"
+  review_cycle: "quarterly"
+  tags: ["demo", "google", "gemini", "quickstart"]

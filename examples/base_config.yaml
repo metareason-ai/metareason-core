@@ -4,6 +4,7 @@ primary_model:
   model: ${PRIMARY_MODEL:gpt-3.5-turbo}
   temperature: ${PRIMARY_TEMPERATURE:0.7}
   max_tokens: ${PRIMARY_MAX_TOKENS:1000}
+  json_schema: ${PRIMARY_SCHEMA:schemas/basic_response.json}
 
 sampling:
   method: latin_hypercube

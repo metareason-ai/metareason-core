@@ -19,6 +19,7 @@ from .base import (
     RateLimitError,
     StreamChunk,
 )
+from .schema_utils import create_anthropic_schema_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -181,9 +182,25 @@ class AnthropicAdapter(LLMAdapter):
             "temperature": request.temperature,
         }
 
-        # Add system message if present
-        if system_message:
-            completion_kwargs["system"] = system_message
+        # Add system message if present, with schema enhancement
+        final_system_message = system_message
+        if request.json_schema_data:
+            try:
+                schema_prompt = create_anthropic_schema_prompt(request.json_schema_data)
+                if final_system_message:
+                    final_system_message = f"{final_system_message}\n\n{schema_prompt}"
+                else:
+                    final_system_message = schema_prompt
+                logger.debug(
+                    f"Enhanced system message with JSON schema for Anthropic model {model}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to create schema prompt for Anthropic, proceeding without schema: {e}"
+                )
+
+        if final_system_message:
+            completion_kwargs["system"] = final_system_message
 
         # Add optional parameters
         if request.top_p is not None:
@@ -282,9 +299,26 @@ class AnthropicAdapter(LLMAdapter):
             "stream": True,
         }
 
-        # Add system message if present
-        if system_message:
-            completion_kwargs["system"] = system_message
+        # Add system message if present, with schema enhancement
+        final_system_message = system_message
+        if request.json_schema_data:
+            try:
+                schema_prompt = create_anthropic_schema_prompt(request.json_schema_data)
+                if final_system_message:
+                    final_system_message = f"{final_system_message}\n\n{schema_prompt}"
+                else:
+                    final_system_message = schema_prompt
+                logger.debug(
+                    f"Enhanced system message with JSON schema for Anthropic streaming model {model}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to create schema prompt for Anthropic streaming, "
+                    f"proceeding without schema: {e}"
+                )
+
+        if final_system_message:
+            completion_kwargs["system"] = final_system_message
 
         # Add optional parameters
         if request.top_p is not None:

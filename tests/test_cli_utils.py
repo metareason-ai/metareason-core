@@ -204,6 +204,9 @@ class TestCompareConfigurations:
                 """
 prompt_id: test_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -236,6 +239,9 @@ oracles:
                 """
 prompt_id: config1
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 100
 axes:
   name:
@@ -255,6 +261,9 @@ oracles:
                 """
 prompt_id: config2
 prompt_template: "Hi {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 200
 axes:
   name:
@@ -298,6 +307,9 @@ oracles:
                 """
 prompt_id: same_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 100
 axes:
   name:
@@ -319,6 +331,9 @@ metadata:
                 """
 prompt_id: same_config
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 100
 axes:
   name:
@@ -363,6 +378,9 @@ class TestCreateConfigSummaryTable:
                 """
 prompt_id: test_summary
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 n_variants: 500
 axes:
   name:
@@ -557,6 +575,9 @@ class TestUtilsIntegration:
                 """
 prompt_id: config1
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical
@@ -574,6 +595,9 @@ oracles:
                 """
 prompt_id: config2
 prompt_template: "Hello {{name}}"
+primary_model:
+  adapter: openai
+  model: gpt-3.5-turbo
 axes:
   name:
     type: categorical

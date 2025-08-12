@@ -19,6 +19,7 @@ from .base import (
     RateLimitError,
     StreamChunk,
 )
+from .schema_utils import convert_schema_for_google
 
 logger = logging.getLogger(__name__)
 
@@ -27,18 +28,54 @@ class GoogleAdapter(LLMAdapter):
     """Adapter for Google Gemini API using Google GenAI SDK."""
 
     SUPPORTED_MODELS = {
-        # Gemini 2.0 models
-        "gemini-2.0-flash-exp": {"context": 1000000, "max_output": 8192},
-        "gemini-2.0-flash-001": {"context": 1000000, "max_output": 8192},
-        # Gemini 1.5 models
-        "gemini-1.5-pro": {"context": 2000000, "max_output": 8192},
-        "gemini-1.5-pro-exp-0801": {"context": 2000000, "max_output": 8192},
-        "gemini-1.5-flash": {"context": 1000000, "max_output": 8192},
-        "gemini-1.5-flash-002": {"context": 1000000, "max_output": 8192},
-        "gemini-1.5-flash-8b": {"context": 1000000, "max_output": 8192},
-        # Gemini 1.0 models (legacy support)
-        "gemini-1.0-pro": {"context": 32760, "max_output": 2048},
-        "gemini-1.0-pro-vision": {"context": 16384, "max_output": 2048},
+        # Gemini 2.0 models (with structured output support)
+        "gemini-2.0-flash-exp": {
+            "context": 1000000,
+            "max_output": 8192,
+            "structured_output": True,
+        },
+        "gemini-2.0-flash-001": {
+            "context": 1000000,
+            "max_output": 8192,
+            "structured_output": True,
+        },
+        # Gemini 1.5 models (with structured output support)
+        "gemini-1.5-pro": {
+            "context": 2000000,
+            "max_output": 8192,
+            "structured_output": True,
+        },
+        "gemini-1.5-pro-exp-0801": {
+            "context": 2000000,
+            "max_output": 8192,
+            "structured_output": True,
+        },
+        "gemini-1.5-flash": {
+            "context": 1000000,
+            "max_output": 8192,
+            "structured_output": True,
+        },
+        "gemini-1.5-flash-002": {
+            "context": 1000000,
+            "max_output": 8192,
+            "structured_output": True,
+        },
+        "gemini-1.5-flash-8b": {
+            "context": 1000000,
+            "max_output": 8192,
+            "structured_output": True,
+        },
+        # Gemini 1.0 models (legacy support, no structured output)
+        "gemini-1.0-pro": {
+            "context": 32760,
+            "max_output": 2048,
+            "structured_output": False,
+        },
+        "gemini-1.0-pro-vision": {
+            "context": 16384,
+            "max_output": 2048,
+            "structured_output": False,
+        },
     }
 
     def __init__(
@@ -150,6 +187,18 @@ class GoogleAdapter(LLMAdapter):
 
         return formatted_messages
 
+    def _supports_structured_output(self, model: str) -> bool:
+        """Check if a model supports native structured output.
+
+        Args:
+            model: Model identifier
+
+        Returns:
+            True if model supports structured output
+        """
+        model_info = self.SUPPORTED_MODELS.get(model, {})
+        return model_info.get("structured_output", False)
+
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
         """Generate completion using Google Gemini API.
 
@@ -200,6 +249,22 @@ class GoogleAdapter(LLMAdapter):
             generation_config["top_p"] = request.top_p
         if request.stop:
             generation_config["stop_sequences"] = request.stop
+
+        # Add structured output support
+        if request.json_schema_data and self._supports_structured_output(model):
+            try:
+                schema_config = convert_schema_for_google(request.json_schema_data)
+                generation_config.update(schema_config)
+                logger.debug(f"Using native structured output for Google model {model}")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to set up structured output for Google, "
+                    f"falling back to regular completion: {e}"
+                )
+        elif request.json_schema_data:
+            logger.info(
+                f"Model {model} does not support native structured output, schema will be ignored"
+            )
 
         # Make API request
         try:
@@ -321,6 +386,24 @@ class GoogleAdapter(LLMAdapter):
             generation_config["top_p"] = request.top_p
         if request.stop:
             generation_config["stop_sequences"] = request.stop
+
+        # Add structured output support
+        if request.json_schema_data and self._supports_structured_output(model):
+            try:
+                schema_config = convert_schema_for_google(request.json_schema_data)
+                generation_config.update(schema_config)
+                logger.debug(
+                    f"Using native structured output for Google streaming model {model}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to set up structured output for Google streaming, "
+                    f"falling back to regular completion: {e}"
+                )
+        elif request.json_schema_data:
+            logger.info(
+                f"Model {model} does not support native structured output, schema will be ignored in streaming"
+            )
 
         # Make streaming API request
         try:

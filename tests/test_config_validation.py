@@ -31,6 +31,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, please respond to: {{question}}",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {
                 "name": {"type": "categorical", "values": ["Alice", "Bob", "Charlie"]},
                 "question": {
@@ -58,6 +59,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "",
             "prompt_template": "Hello world",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"var": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
@@ -78,6 +80,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "Invalid-Format!",
             "prompt_template": "Hello world",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"var": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
@@ -100,6 +103,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "a" * 101,  # 101 characters
             "prompt_template": "Hello world",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"var": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
@@ -120,6 +124,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"var": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
@@ -142,6 +147,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hi",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"var": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
@@ -162,6 +168,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello world, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {},
             "oracles": {
                 "accuracy": {
@@ -184,6 +191,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{InvalidName}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"InvalidName": {"type": "categorical", "values": ["a"]}},
             "oracles": {
                 "accuracy": {
@@ -206,6 +214,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"name": {"type": "categorical", "values": ["a"]}},
             "n_variants": 50,
             "oracles": {
@@ -228,6 +237,7 @@ class TestEvaluationConfig:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"name": {"type": "categorical", "values": ["a"]}},
             "n_variants": 15000,
             "oracles": {
@@ -254,6 +264,7 @@ class TestTemplateVariableValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}} and {{age}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
             "oracles": {
                 "accuracy": {
@@ -278,6 +289,7 @@ class TestTemplateVariableValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {
                 "name": {"type": "categorical", "values": ["Alice"]},
                 "unused_var": {"type": "categorical", "values": ["value"]},
@@ -728,6 +740,7 @@ class TestCrossFieldValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{category}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"category": {"type": "categorical", "values": ["A", "B", "C"]}},
             "sampling": {"method": "latin_hypercube", "stratified_by": ["category"]},
             "oracles": {
@@ -747,6 +760,7 @@ class TestCrossFieldValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{category}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"category": {"type": "categorical", "values": ["A", "B", "C"]}},
             "sampling": {
                 "method": "latin_hypercube",
@@ -773,6 +787,7 @@ class TestCrossFieldValidation:
             "prompt_id": "test_prompt",
             "prompt_template": "Hello world, this is a longer template "
             "with {{temperature}}",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"temperature": {"type": "uniform", "min": 0.0, "max": 1.0}},
             "sampling": {"method": "latin_hypercube", "stratified_by": ["temperature"]},
             "oracles": {
@@ -795,6 +810,7 @@ class TestCrossFieldValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
             "oracles": {},
         }
@@ -810,6 +826,7 @@ class TestCrossFieldValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{category}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {
                 "category": {
                     "type": "categorical",
@@ -834,6 +851,7 @@ class TestCrossFieldValidation:
         config_data = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{category}} {{type}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {
                 "category": {"type": "categorical", "values": ["A", "B", "C"]},
                 "type": {
@@ -911,6 +929,7 @@ class TestErrorMessageQuality:
         base_config = {
             "prompt_id": "test_prompt",
             "prompt_template": "Hello {{name}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
             "oracles": {
                 "accuracy": {
@@ -938,6 +957,7 @@ class TestErrorMessageQuality:
         config_data = {
             "prompt_id": "",  # Invalid
             "prompt_template": "Hello {{name}}, this is a longer template",
+            "primary_model": {"adapter": "openai", "model": "gpt-3.5-turbo"},
             "axes": {"name": {"type": "categorical", "values": ["Alice"]}},
             "oracles": {
                 "accuracy": {

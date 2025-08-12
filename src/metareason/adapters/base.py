@@ -41,6 +41,9 @@ class CompletionRequest(BaseModel):
     presence_penalty: Optional[float] = Field(default=0.0, ge=-2.0, le=2.0)
     stop: Optional[List[str]] = None
     stream: bool = False
+    json_schema_data: Optional[Dict[str, Any]] = Field(
+        default=None, description="Loaded JSON schema data for structured output"
+    )
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 

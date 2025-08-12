@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "properties": {
+    "passed": {
+      "type": "boolean",
+      "description": "Whether the response passes the evaluation criteria"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confidence in the binary classification"
+    },
+    "criteria_met": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of criteria that were met"
+    },
+    "criteria_failed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of criteria that were not met"
+    },
+    "reasoning": {
+      "type": "string",
+      "description": "Detailed reasoning for the pass/fail decision",
+      "minLength": 15
+    }
+  },
+  "required": ["passed", "reasoning"],
+  "additionalProperties": false
+}
