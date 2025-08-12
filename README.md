@@ -32,17 +32,22 @@ metareason report --latest
 
 ## 📋 Features
 
+### ✅ Available Now (v0.1.0)
+
+- **YAML-based evaluation specifications** - Declarative configuration for evaluation workflows
+- **Latin Hypercube Sampling** - Optimized parameter space exploration with statistical guarantees
+- **Jinja2 template system** - Flexible prompt generation with custom filters ([docs](docs/templating-guide.md))
+- **Embedding similarity oracle** - Semantic accuracy scoring with 4 similarity methods, batch processing, and performance optimization
+- **LLM-as-Judge oracle** - Explainability scoring with robust JSON parsing and multiple output formats
+- **Multi-provider LLM adapters** - OpenAI, Anthropic, Ollama, with built-in rate limiting and privacy protection
+- **CLI interface** - Configuration validation, template generation, and rich console output
+
 ### 🔄 In Development (v1.1)
 
-- YAML-based evaluation specifications
-- Latin Hypercube Sampling for parameter space exploration
-- Jinja2-based template system with custom filters (see [Templating Guide](docs/templating-guide.md))
-- Embedding similarity oracle (accuracy scoring)
-- LLM-as-judge oracle (explainability scoring)
 - Bayesian confidence intervals via PyMC
-- CLI interface with rich output
+- End-to-end evaluation pipeline integration
 - Detailed reporting and visualization
-- Multi-model comparison
+- Multi-model comparison workflows
 
 ### 🎯 Planned Features (v2.0)
 
