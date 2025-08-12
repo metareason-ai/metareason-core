@@ -211,17 +211,20 @@ def create_config_summary_table(config: EvaluationConfig) -> Table:
     table.add_column("Value", style="magenta")
 
     # Basic information
-    table.add_row("Prompt ID", config.prompt_id)
+    table.add_row("Spec ID", config.spec_id)
     table.add_row("Variants", str(config.n_variants))
     table.add_row(
         "Sampling Method", config.sampling.method if config.sampling else "None"
     )
+    table.add_row("Pipeline Steps", str(len(config.pipeline)))
 
-    # Axes
-    axis_count = len(config.axes)
-    categorical_count = sum(
-        1 for axis in config.axes.values() if hasattr(axis, "values")
-    )
+    # Axes - aggregate from all pipeline steps
+    all_axes = {}
+    for step in config.pipeline:
+        all_axes.update(step.axes)
+
+    axis_count = len(all_axes)
+    categorical_count = sum(1 for axis in all_axes.values() if hasattr(axis, "values"))
     continuous_count = axis_count - categorical_count
 
     table.add_row("Total Axes", str(axis_count))

@@ -24,6 +24,7 @@ classifiers = [
 dependencies = [
     # Core dependencies with proper version pinning
     "pymc>=5.0,<6.0",  # Bayesian analysis
+    "arviz>=0.18,<1.0",  # Bayesian diagnostics and visualization
     "numpy>=1.24,<2.0",  # Numerical computing
     "scipy>=1.11,<2.0",  # Scientific computing
     "pydantic>=2.0,<3.0",  # Configuration validation

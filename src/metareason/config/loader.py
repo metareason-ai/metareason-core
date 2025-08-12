@@ -216,20 +216,23 @@ def validate_yaml_string(yaml_content: str) -> EvaluationConfig:
             f"Got {type(data).__name__} instead."
         )
 
-    # Handle schema -> axes alias mapping
-    if "schema" in data and "axes" not in data:
-        data["axes"] = data.pop("schema")
+    # Convert axis dictionaries in pipeline steps to proper axis objects
+    if "pipeline" in data:
+        for step_data in data["pipeline"]:
+            # Handle schema -> axes alias mapping within pipeline steps
+            if "schema" in step_data and "axes" not in step_data:
+                step_data["axes"] = step_data.pop("schema")
 
-    # Convert axis dictionaries to proper axis objects
-    if "axes" in data:
-        converted_axes = {}
-        for axis_name, axis_data in data["axes"].items():
-            if axis_data["type"] == "categorical":
-                converted_axes[axis_name] = CategoricalAxis(**axis_data)
-            else:
-                # It's a continuous axis
-                converted_axes[axis_name] = ContinuousAxis(**axis_data)
-        data["axes"] = converted_axes
+            # Convert axis dictionaries to proper axis objects
+            if "axes" in step_data:
+                converted_axes = {}
+                for axis_name, axis_data in step_data["axes"].items():
+                    if axis_data["type"] == "categorical":
+                        converted_axes[axis_name] = CategoricalAxis(**axis_data)
+                    else:
+                        # It's a continuous axis
+                        converted_axes[axis_name] = ContinuousAxis(**axis_data)
+                step_data["axes"] = converted_axes
 
     # Convert oracle dictionaries to proper oracle objects
     if "oracles" in data:
@@ -349,20 +352,23 @@ def _load_standard_yaml(file_path: Path) -> Dict[str, Any]:
 
 def _process_config_data(data: Dict[str, Any], file_path: Path) -> EvaluationConfig:
     """Process configuration data and convert to EvaluationConfig."""
-    # Handle schema -> axes alias mapping
-    if "schema" in data and "axes" not in data:
-        data["axes"] = data.pop("schema")
+    # Convert axis dictionaries in pipeline steps to proper axis objects
+    if "pipeline" in data:
+        for step_data in data["pipeline"]:
+            # Handle schema -> axes alias mapping within pipeline steps
+            if "schema" in step_data and "axes" not in step_data:
+                step_data["axes"] = step_data.pop("schema")
 
-    # Convert axis dictionaries to proper axis objects
-    if "axes" in data:
-        converted_axes = {}
-        for axis_name, axis_data in data["axes"].items():
-            if axis_data["type"] == "categorical":
-                converted_axes[axis_name] = CategoricalAxis(**axis_data)
-            else:
-                # It's a continuous axis
-                converted_axes[axis_name] = ContinuousAxis(**axis_data)
-        data["axes"] = converted_axes
+            # Convert axis dictionaries to proper axis objects
+            if "axes" in step_data:
+                converted_axes = {}
+                for axis_name, axis_data in step_data["axes"].items():
+                    if axis_data["type"] == "categorical":
+                        converted_axes[axis_name] = CategoricalAxis(**axis_data)
+                    else:
+                        # It's a continuous axis
+                        converted_axes[axis_name] = ContinuousAxis(**axis_data)
+                step_data["axes"] = converted_axes
 
     # Convert oracle dictionaries to proper oracle objects
     if "oracles" in data:

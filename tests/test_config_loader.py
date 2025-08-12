@@ -13,18 +13,18 @@ from metareason.config import (
 def test_load_valid_yaml_config(tmp_path):
     """Test loading a valid YAML configuration."""
     yaml_content = """
-prompt_id: test_evaluation
-prompt_template: "Analyze {{topic}} with {{style}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-schema:
-  topic:
-    type: categorical
-    values: ["AI", "ML", "DL"]
-  style:
-    type: categorical
-    values: ["formal", "casual"]
+spec_id: test_evaluation
+pipeline:
+  - template: "Analyze {{topic}} with {{style}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      topic:
+        type: categorical
+        values: ["AI", "ML", "DL"]
+      style:
+        type: categorical
+        values: ["formal", "casual"]
 sampling:
   method: latin_hypercube
   random_seed: 42
@@ -41,26 +41,27 @@ oracles:
 
     config = load_yaml_config(yaml_file)
 
-    assert config.prompt_id == "test_evaluation"
+    assert config.spec_id == "test_evaluation"
     assert config.n_variants == 1000
-    assert "topic" in config.axes
-    assert "style" in config.axes
+    assert len(config.pipeline) == 1
+    assert "topic" in config.pipeline[0].axes
+    assert "style" in config.pipeline[0].axes
     assert config.oracles.accuracy.threshold == 0.85
 
 
 def test_load_yaml_with_statistical_config(tmp_path):
     """Test loading YAML with statistical configuration."""
     yaml_content = """
-prompt_id: test_with_stats
-prompt_template: "Test {{param}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-schema:
-  param:
-    type: uniform
-    min: 0.0
-    max: 1.0
+spec_id: test_with_stats
+pipeline:
+  - template: "Test {{param}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      param:
+        type: uniform
+        min: 0.0
+        max: 1.0
 oracles:
   accuracy:
     type: embedding_similarity
@@ -91,15 +92,15 @@ statistical_config:
 def test_validate_yaml_string():
     """Test validating YAML from a string."""
     yaml_content = """
-prompt_id: string_test
-prompt_template: "Do {{action}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-schema:
-  action:
-    type: categorical
-    values: ["analyze", "evaluate"]
+spec_id: string_test
+pipeline:
+  - template: "Do {{action}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      action:
+        type: categorical
+        values: ["analyze", "evaluate"]
 oracles:
   explainability:
     type: llm_judge
@@ -111,7 +112,7 @@ oracles:
 
     config = validate_yaml_string(yaml_content)
 
-    assert config.prompt_id == "string_test"
+    assert config.spec_id == "string_test"
     assert config.oracles.explainability.rubric.strip().startswith("1. Clear")
 
 
@@ -120,15 +121,15 @@ def test_load_yaml_configs_directory(tmp_path):
     # Create multiple YAML files
     configs_data = {
         "config1.yaml": """
-prompt_id: eval_1
-prompt_template: "Test {{x}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-schema:
-  x:
-    type: categorical
-    values: ["a", "b"]
+spec_id: eval_1
+pipeline:
+  - template: "Test {{x}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      x:
+        type: categorical
+        values: ["a", "b"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -136,16 +137,16 @@ oracles:
     threshold: 0.8
 """,
         "config2.yml": """
-prompt_id: eval_2
-prompt_template: "Check {{y}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-schema:
-  y:
-    type: beta
-    alpha: 2.0
-    beta: 5.0
+spec_id: eval_2
+pipeline:
+  - template: "Check {{y}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      y:
+        type: beta
+        alpha: 2.0
+        beta: 5.0
 oracles:
   accuracy:
     type: embedding_similarity
@@ -162,25 +163,25 @@ oracles:
     assert len(configs) == 2
     assert "config1" in configs
     assert "config2" in configs
-    assert configs["config1"].prompt_id == "eval_1"
-    assert configs["config2"].prompt_id == "eval_2"
+    assert configs["config1"].spec_id == "eval_1"
+    assert configs["config2"].spec_id == "eval_2"
 
 
 def test_validation_report(tmp_path):
     """Test validation report generation."""
     yaml_content = """
-prompt_id: test_validation
-prompt_template: "Analyze {{topic}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-schema:
-  topic:
-    type: categorical
-    values: ["AI", "ML"]
-  unused_axis:
-    type: categorical
-    values: ["x", "y", "z"]
+spec_id: test_validation
+pipeline:
+  - template: "Analyze {{topic}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      topic:
+        type: categorical
+        values: ["AI", "ML"]
+      unused_axis:
+        type: categorical
+        values: ["x", "y", "z"]
 n_variants: 100
 oracles:
   accuracy:
@@ -203,13 +204,13 @@ oracles:
 def test_invalid_yaml_syntax(tmp_path):
     """Test handling of invalid YAML syntax."""
     yaml_content = """
-prompt_id: invalid
-prompt_template: "Test"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-schema:
-  - invalid list instead of dict
+spec_id: invalid
+pipeline:
+  - template: "Test"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      - invalid list instead of dict
 """
 
     yaml_file = tmp_path / "invalid.yaml"
@@ -225,16 +226,16 @@ schema:
 def test_missing_required_fields(tmp_path):
     """Test validation of missing required fields."""
     yaml_content = """
-prompt_template: "Test {{x}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-schema:
-  x:
-    type: categorical
-    values: ["a", "b"]
+pipeline:
+  - template: "Test {{x}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      x:
+        type: categorical
+        values: ["a", "b"]
 """
-    # Missing prompt_id and oracles
+    # Missing spec_id and oracles
 
     yaml_file = tmp_path / "missing_fields.yaml"
     yaml_file.write_text(yaml_content)
@@ -248,30 +249,30 @@ schema:
 def test_all_distribution_types(tmp_path):
     """Test all supported distribution types."""
     yaml_content = """
-prompt_id: all_distributions
-prompt_template: "Test {{cat}} {{truncnorm}} {{beta}} {{uniform}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-schema:
-  cat:
-    type: categorical
-    values: ["a", "b", "c"]
-    weights: [0.5, 0.3, 0.2]
-  truncnorm:
-    type: truncated_normal
-    mu: 0.5
-    sigma: 0.1
-    min: 0.0
-    max: 1.0
-  beta:
-    type: beta
-    alpha: 2.0
-    beta: 5.0
-  uniform:
-    type: uniform
-    min: -1.0
-    max: 1.0
+spec_id: all_distributions
+pipeline:
+  - template: "Test {{cat}} {{truncnorm}} {{beta}} {{uniform}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    axes:
+      cat:
+        type: categorical
+        values: ["a", "b", "c"]
+        weights: [0.5, 0.3, 0.2]
+      truncnorm:
+        type: truncated_normal
+        mu: 0.5
+        sigma: 0.1
+        min: 0.0
+        max: 1.0
+      beta:
+        type: beta
+        alpha: 2.0
+        beta: 5.0
+      uniform:
+        type: uniform
+        min: -1.0
+        max: 1.0
 oracles:
   accuracy:
     type: embedding_similarity
@@ -284,11 +285,11 @@ oracles:
 
     config = load_yaml_config(yaml_file)
 
-    assert len(config.axes) == 4
-    assert config.axes["cat"].type == "categorical"
-    assert config.axes["truncnorm"].type == "truncated_normal"
-    assert config.axes["beta"].type == "beta"
-    assert config.axes["uniform"].type == "uniform"
+    assert len(config.pipeline[0].axes) == 4
+    assert config.pipeline[0].axes["cat"].type == "categorical"
+    assert config.pipeline[0].axes["truncnorm"].type == "truncated_normal"
+    assert config.pipeline[0].axes["beta"].type == "beta"
+    assert config.pipeline[0].axes["uniform"].type == "uniform"
 
 
 def test_file_not_found():

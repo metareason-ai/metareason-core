@@ -111,7 +111,12 @@ def info(ctx: click.Context, output_format: str) -> None:
 
 
 @cli.command()
-@click.argument("config_file", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--spec-file",
+    required=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to the specification file",
+)
 @click.option(
     "--output",
     "-o",
@@ -123,22 +128,27 @@ def info(ctx: click.Context, output_format: str) -> None:
 )
 @click.pass_context
 def run(
-    ctx: click.Context, config_file: Path, output: Optional[Path], dry_run: bool
+    ctx: click.Context, spec_file: Path, output: Optional[Path], dry_run: bool
 ) -> None:
-    """Run an evaluation using the specified configuration file."""
+    """Run an evaluation using the specified specification file."""
     from metareason.config import load_yaml_config
 
     try:
-        config = load_yaml_config(config_file)
+        config = load_yaml_config(spec_file)
 
         if dry_run:
-            console.print("[dim]Would run evaluation with configuration:[/dim]")
-            console.print(f"📄 Config: {config_file}")
-            console.print(f"🎯 Prompt: {config.prompt_id}")
+            console.print("[dim]Would run evaluation with specification:[/dim]")
+            console.print(f"📄 Spec: {spec_file}")
+            console.print(f"🎯 Spec ID: {config.spec_id}")
             console.print(f"🔢 Variants: {config.n_variants}")
             console.print(
                 f"📊 Sampling: {config.sampling.method if config.sampling else 'None'}"
             )
+            console.print(f"🔧 Pipeline Steps: {len(config.pipeline)}")
+            for i, step in enumerate(config.pipeline, 1):
+                console.print(
+                    f"   Step {i}: {step.adapter}/{step.model} ({len(step.axes)} axes)"
+                )
             oracles = [
                 config.oracles.accuracy,
                 config.oracles.explainability,
@@ -155,7 +165,7 @@ def run(
             )
 
     except Exception as e:
-        console.print(f"❌ [red]Error loading configuration:[/red] {e}")
+        console.print(f"❌ [red]Error loading specification:[/red] {e}")
         sys.exit(1)
 
 

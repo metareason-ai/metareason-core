@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import yaml
 from rich.console import Console
 from rich.table import Table
 
@@ -22,6 +23,7 @@ from metareason.cli.utils import (
 )
 from metareason.config.loader import load_yaml_config
 from metareason.config.validator import ValidationReport
+from tests.fixtures.config_builders import ConfigBuilder
 
 
 class TestFindConfigFiles:
@@ -199,25 +201,26 @@ class TestCompareConfigurations:
 
     def test_compare_identical_configs(self):
         """Test comparing identical configurations."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(
-                """
-prompt_id: test_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "Test answer"
-    threshold: 0.8
-"""
+        # Create configuration using ConfigBuilder
+        config_dict = (
+            ConfigBuilder()
+            .spec_id("test_config")
+            .single_step(
+                template="Hello {{name}}",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                name=["Alice", "Bob"],
             )
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity("Test answer", threshold=0.8),
+            )
+            .build_dict()
+        )
+
+        # Create temporary YAML file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_dict, f)
             temp_path = Path(f.name)
 
         try:
@@ -234,48 +237,49 @@ oracles:
 
     def test_compare_different_configs(self):
         """Test comparing different configurations."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
-            f1.write(
-                """
-prompt_id: config1
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-n_variants: 100
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "Test answer"
-    threshold: 0.8
-"""
+        # Create first configuration
+        config1_dict = (
+            ConfigBuilder()
+            .spec_id("config1")
+            .single_step(
+                template="Hello {{name}}",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                name=["Alice", "Bob"],
             )
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity("Test answer", threshold=0.8),
+            )
+            .with_variants(100)
+            .build_dict()
+        )
+
+        # Create second configuration with differences
+        config2_dict = (
+            ConfigBuilder()
+            .spec_id("config2")
+            .single_step(
+                template="Hi {{name}}",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                name=["Alice", "Bob", "Charlie"],
+            )
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity("Test answer", threshold=0.9),
+            )
+            .with_variants(200)
+            .build_dict()
+        )
+
+        # Create temporary YAML files
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
+            yaml.dump(config1_dict, f1)
             temp_path1 = Path(f1.name)
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f2:
-            f2.write(
-                """
-prompt_id: config2
-prompt_template: "Hi {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-n_variants: 200
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob", "Charlie"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "Test answer"
-    threshold: 0.9
-"""
-            )
+            yaml.dump(config2_dict, f2)
             temp_path2 = Path(f2.name)
 
         try:
@@ -294,7 +298,7 @@ oracles:
             # Check specific changes
             changes = result["changes"]
             change_paths = [c["path"] for c in changes]
-            assert "prompt_id" in change_paths
+            assert "spec_id" in change_paths
             assert "n_variants" in change_paths
         finally:
             temp_path1.unlink()
@@ -302,52 +306,34 @@ oracles:
 
     def test_compare_with_ignored_fields(self):
         """Test comparing with ignored fields."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
-            f1.write(
-                """
-prompt_id: same_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-n_variants: 100
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "Test answer"
-    threshold: 0.8
-metadata:
-  created_date: "2024-01-01"
-"""
+        # Create base configuration
+        base_config = (
+            ConfigBuilder()
+            .spec_id("same_config")
+            .single_step(
+                template="Hello {{name}}",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                name=["Alice", "Bob"],
             )
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity("Test answer", threshold=0.8),
+            )
+            .with_variants(100)
+        )
+
+        # Create configurations with different metadata
+        config1_dict = base_config.with_metadata(created_date="2024-01-01").build_dict()
+        config2_dict = base_config.with_metadata(created_date="2024-01-02").build_dict()
+
+        # Create temporary YAML files
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f1:
+            yaml.dump(config1_dict, f1)
             temp_path1 = Path(f1.name)
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f2:
-            f2.write(
-                """
-prompt_id: same_config
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-n_variants: 100
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "Test answer"
-    threshold: 0.8
-metadata:
-  created_date: "2024-01-02"
-"""
-            )
+            yaml.dump(config2_dict, f2)
             temp_path2 = Path(f2.name)
 
         try:
@@ -373,41 +359,41 @@ class TestCreateConfigSummaryTable:
 
     def test_create_summary_table(self):
         """Test creating a configuration summary table."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            f.write(
-                """
-prompt_id: test_summary
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-n_variants: 500
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-  temperature:
-    type: truncated_normal
-    mu: 0.7
-    sigma: 0.1
-    min: 0.0
-    max: 1.0
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "Test answer"
-    threshold: 0.8
-sampling:
-  method: latin_hypercube
-metadata:
-  version: "1.0.0"
-statistical_config:
-  model: beta_binomial
-  prior:
-    alpha: 1.0
-    beta: 1.0
-"""
+        # Create configuration using ConfigBuilder
+        config_dict = (
+            ConfigBuilder()
+            .spec_id("test_summary")
+            .add_pipeline_step(
+                template="Hello {{name}} with temperature {{temperature}}",
+                adapter="openai",
+                model="gpt-3.5-turbo",
+                axes={
+                    "name": {"type": "categorical", "values": ["Alice", "Bob"]},
+                    "temperature": {
+                        "type": "truncated_normal",
+                        "mu": 0.7,
+                        "sigma": 0.1,
+                        "min": 0.0,
+                        "max": 1.0,
+                    },
+                },
             )
+            .with_oracle(
+                "accuracy",
+                lambda o: o.embedding_similarity("Test answer", threshold=0.8),
+            )
+            .with_variants(500)
+            .with_sampling(method="latin_hypercube")
+            .with_metadata(version="1.0.0")
+            .with_statistical_config(
+                model="beta_binomial", prior={"alpha": 1.0, "beta": 1.0}
+            )
+            .build_dict()
+        )
+
+        # Create temporary YAML file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_dict, f)
             temp_path = Path(f.name)
 
         try:
@@ -569,46 +555,47 @@ class TestUtilsIntegration:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
-            # Create similar configs
-            config1 = temp_path / "config1.yaml"
-            config1.write_text(
-                """
-prompt_id: config1
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "Test answer"
-    threshold: 0.8
-"""
+            # Create similar configs using ConfigBuilder
+            config1_dict = (
+                ConfigBuilder()
+                .spec_id("config1")
+                .single_step(
+                    template="Hello {{name}}",
+                    adapter="openai",
+                    model="gpt-3.5-turbo",
+                    name=["Alice", "Bob"],
+                )
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("Test answer", threshold=0.8),
+                )
+                .build_dict()
             )
 
-            config2 = temp_path / "config2.yaml"
-            config2.write_text(
-                """
-prompt_id: config2
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob", "Charlie"]
-oracles:
-  accuracy:
-    type: embedding_similarity
-    canonical_answer: "Test answer"
-    threshold: 0.8
-"""
+            config2_dict = (
+                ConfigBuilder()
+                .spec_id("config2")
+                .single_step(
+                    template="Hello {{name}}",
+                    adapter="openai",
+                    model="gpt-3.5-turbo",
+                    name=["Alice", "Bob", "Charlie"],
+                )
+                .with_oracle(
+                    "accuracy",
+                    lambda o: o.embedding_similarity("Test answer", threshold=0.8),
+                )
+                .build_dict()
             )
+
+            # Write configs to files
+            config1 = temp_path / "config1.yaml"
+            with open(config1, "w") as f:
+                yaml.dump(config1_dict, f)
+
+            config2 = temp_path / "config2.yaml"
+            with open(config2, "w") as f:
+                yaml.dump(config2_dict, f)
 
             # Find configs
             found_configs = find_config_files(temp_path)

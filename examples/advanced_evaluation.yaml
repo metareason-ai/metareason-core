@@ -1,50 +1,47 @@
 # Advanced evaluation configuration demonstrating includes and inheritance
 inherits: base_config.yaml
 
-prompt_id: ${PROMPT_ID:advanced_qa_evaluation}
+spec_id: ${PROMPT_ID:advanced_qa_evaluation}
 
-# Override primary model to use detailed analysis schema
-primary_model:
-  json_schema: "schemas/detailed_analysis.json"
-prompt_template: |
-  Context: ${CONTEXT:You are an AI assistant helping with technical questions.}
+pipeline:
+  - template: |
+      Context: ${CONTEXT:You are an AI assistant helping with technical questions.}
 
-  Question Type: {{question_type}}
-  Difficulty: {{difficulty}}
-  Domain: {{domain}}
+      Question Type: {{question_type}}
+      Difficulty: {{difficulty}}
+      Domain: {{domain}}
 
-  Question: {{question}}
+      Question: {{question}}
 
-  Please provide a {{response_style}} response.
-
-axes:
-  question_type:
-    type: categorical
-    values: ["factual", "analytical", "creative", "problem-solving"]
-    weights: [0.3, 0.3, 0.2, 0.2]
-
-  difficulty:
-    type: categorical
-    values: ["beginner", "intermediate", "advanced"]
-    weights: [0.4, 0.4, 0.2]
-
-  domain:
-    type: categorical
-    values: ["technology", "science", "business", "general"]
-
-  response_style:
-    type: categorical
-    values: ["concise", "detailed", "step-by-step"]
-
-  question:
-    type: categorical
-    values: [
-      "What is machine learning?",
-      "How do neural networks work?",
-      "Explain the difference between AI and ML",
-      "What are the ethical implications of AI?",
-      "How can businesses implement AI solutions?"
-    ]
+      Please provide a {{response_style}} response.
+    # Override primary model to use detailed analysis schema
+    adapter: openai
+    model: gpt-4
+    json_schema: "schemas/detailed_analysis.json"
+    axes:
+      question_type:
+        type: categorical
+        values: ["factual", "analytical", "creative", "problem-solving"]
+        weights: [0.3, 0.3, 0.2, 0.2]
+      difficulty:
+        type: categorical
+        values: ["beginner", "intermediate", "advanced"]
+        weights: [0.4, 0.4, 0.2]
+      domain:
+        type: categorical
+        values: ["technology", "science", "business", "general"]
+      response_style:
+        type: categorical
+        values: ["concise", "detailed", "step-by-step"]
+      question:
+        type: categorical
+        values: [
+          "What is machine learning?",
+          "How do neural networks work?",
+          "Explain the difference between AI and ML",
+          "What are the ethical implications of AI?",
+          "How can businesses implement AI solutions?"
+        ]
 
 # Oracle configurations for comprehensive evaluation
 oracles:

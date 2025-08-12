@@ -1,23 +1,24 @@
 # Configuration demonstrating environment variable substitution
 
-prompt_id: ${EVALUATION_NAME:environment_demo}
-prompt_template: |
-  System: ${SYSTEM_PROMPT:You are a helpful AI assistant.}
+spec_id: ${EVALUATION_NAME:environment_demo}
+pipeline:
+  - template: |
+      System: ${SYSTEM_PROMPT:You are a helpful AI assistant.}
 
-  Task: {{task_type}}
-  Complexity: {{complexity}}
+      Task: {{task_type}}
+      Complexity: {{complexity}}
 
-  ${TASK_DESCRIPTION:Please complete the requested task.}
-
-axes:
-  task_type:
-    type: categorical
-    values: ["${TASK1:summarization}", "${TASK2:analysis}", "${TASK3:generation}"]
-
-  complexity:
-    type: categorical
-    values: ["simple", "moderate", "complex"]
-    weights: [${WEIGHT_SIMPLE:0.5}, ${WEIGHT_MODERATE:0.3}, ${WEIGHT_COMPLEX:0.2}]
+      ${TASK_DESCRIPTION:Please complete the requested task.}
+    adapter: ${ADAPTER:openai}
+    model: ${MODEL:gpt-3.5-turbo}
+    axes:
+      task_type:
+        type: categorical
+        values: ["${TASK1:summarization}", "${TASK2:analysis}", "${TASK3:generation}"]
+      complexity:
+        type: categorical
+        values: ["simple", "moderate", "complex"]
+        weights: ["${WEIGHT_SIMPLE:0.5}", "${WEIGHT_MODERATE:0.3}", "${WEIGHT_COMPLEX:0.2}"]
 
 sampling:
   method: ${SAMPLING_METHOD:latin_hypercube}

@@ -115,17 +115,17 @@ class TestRunCommand:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_run
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-  temperature: 0.7
+spec_id: test_run
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    temperature: 0.7
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 n_variants: 100
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -139,7 +139,7 @@ sampling:
 
         try:
             runner = CliRunner()
-            result = runner.invoke(cli, ["run", str(temp_path)])
+            result = runner.invoke(cli, ["run", "--spec-file", str(temp_path)])
 
             assert result.exit_code == 0
             assert "Running evaluation" in result.output
@@ -152,17 +152,17 @@ sampling:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_dry_run
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-  temperature: 0.7
+spec_id: test_dry_run
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    temperature: 0.7
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 n_variants: 100
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -176,7 +176,9 @@ sampling:
 
         try:
             runner = CliRunner()
-            result = runner.invoke(cli, ["run", str(temp_path), "--dry-run"])
+            result = runner.invoke(
+                cli, ["run", "--spec-file", str(temp_path), "--dry-run"]
+            )
 
             if result.exit_code != 0:
                 print(f"Error output: {result.output}")
@@ -194,17 +196,17 @@ sampling:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_output
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-  temperature: 0.7
+spec_id: test_output
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    temperature: 0.7
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 n_variants: 100
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -226,7 +228,14 @@ sampling:
                 runner = CliRunner()
                 result = runner.invoke(
                     cli,
-                    ["run", str(temp_path), "--output", str(output_path), "--dry-run"],
+                    [
+                        "run",
+                        "--spec-file",
+                        str(temp_path),
+                        "--output",
+                        str(output_path),
+                        "--dry-run",
+                    ],
                 )
 
                 assert result.exit_code == 0
@@ -241,25 +250,26 @@ sampling:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: ""  # Invalid empty ID
-prompt_template: "Hello {{name}}"
+spec_id: ""  # Invalid empty ID
+pipeline:
+  - template: "Hello {{name}}"
 """
             )
             temp_path = Path(f.name)
 
         try:
             runner = CliRunner()
-            result = runner.invoke(cli, ["run", str(temp_path)])
+            result = runner.invoke(cli, ["run", "--spec-file", str(temp_path)])
 
             assert result.exit_code == 1
-            assert "Error loading configuration" in result.output
+            assert "Error loading specification" in result.output
         finally:
             temp_path.unlink()
 
     def test_run_nonexistent_config(self):
         """Test run command with non-existent configuration file."""
         runner = CliRunner()
-        result = runner.invoke(cli, ["run", "/nonexistent/config.yaml"])
+        result = runner.invoke(cli, ["run", "--spec-file", "/nonexistent/config.yaml"])
 
         assert result.exit_code == 2  # Click validation error
         assert "does not exist" in result.output
@@ -269,16 +279,16 @@ prompt_template: "Hello {{name}}"
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 """
-prompt_id: test_verbose
-prompt_template: "Hello {{name}}"
-primary_model:
-  adapter: openai
-  model: gpt-3.5-turbo
-  temperature: 0.7
-axes:
-  name:
-    type: categorical
-    values: ["Alice", "Bob"]
+spec_id: test_verbose
+pipeline:
+  - template: "Hello {{name}}"
+    adapter: openai
+    model: gpt-3.5-turbo
+    temperature: 0.7
+    axes:
+      name:
+        type: categorical
+        values: ["Alice", "Bob"]
 oracles:
   accuracy:
     type: embedding_similarity
@@ -294,7 +304,7 @@ n_variants: 100
         try:
             runner = CliRunner()
             result = runner.invoke(
-                cli, ["--verbose", "run", str(temp_path), "--dry-run"]
+                cli, ["--verbose", "run", "--spec-file", str(temp_path), "--dry-run"]
             )
 
             assert result.exit_code == 0
