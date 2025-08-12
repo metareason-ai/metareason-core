@@ -1,26 +1,36 @@
 """Anthropic adapter implementation."""
 
+import asyncio
 import logging
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Union
+
+import anthropic
+from anthropic import AsyncAnthropic
 
 from .base import (
+    AuthenticationError,
     CompletionRequest,
     CompletionResponse,
+    LLMAdapter,
     Message,
     MessageRole,
     ModelNotFoundError,
     ProviderError,
+    RateLimitError,
     StreamChunk,
 )
-from .http_base import BaseHTTPAdapter, RateLimitConfig, RetryConfig
 
 logger = logging.getLogger(__name__)
 
 
-class AnthropicAdapter(BaseHTTPAdapter):
-    """Adapter for Anthropic API."""
+class AnthropicAdapter(LLMAdapter):
+    """Adapter for Anthropic API using official Anthropic client."""
 
     SUPPORTED_MODELS = {
+        # Claude 3.5 models
+        "claude-3-5-sonnet-20241022": {"context": 200000, "max_output": 8192},
+        "claude-3-5-sonnet-20240620": {"context": 200000, "max_output": 8192},
+        "claude-3-5-haiku-20241022": {"context": 200000, "max_output": 8192},
         # Claude 3 models
         "claude-3-opus-20240229": {"context": 200000, "max_output": 4096},
         "claude-3-sonnet-20240229": {"context": 200000, "max_output": 4096},
@@ -39,8 +49,8 @@ class AnthropicAdapter(BaseHTTPAdapter):
         api_version: str = "2023-06-01",
         default_model: str = "claude-3-sonnet-20240229",
         timeout: float = 30.0,
-        retry_config: Optional[Dict[str, Any]] = None,
-        rate_limit_config: Optional[Dict[str, Any]] = None,
+        max_retries: int = 3,
+        batch_size: int = 10,
         config: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
@@ -52,8 +62,8 @@ class AnthropicAdapter(BaseHTTPAdapter):
             api_version: API version
             default_model: Default model to use
             timeout: Request timeout
-            retry_config: Retry configuration
-            rate_limit_config: Rate limit configuration
+            max_retries: Maximum retry attempts
+            batch_size: Maximum requests per batch
             config: Additional configuration
             **kwargs: Additional arguments
         """
@@ -68,35 +78,38 @@ class AnthropicAdapter(BaseHTTPAdapter):
                     "variable or pass api_key parameter."
                 )
 
-        # Prepare headers
-        headers = kwargs.pop("headers", {})
-        headers.update(
-            {
-                "x-api-key": api_key,  # Anthropic uses x-api-key header
-                "anthropic-version": api_version,
-            }
-        )
+        super().__init__(config)
 
-        # Parse retry and rate limit configs
-        retry_cfg = RetryConfig(**retry_config) if retry_config else RetryConfig()
-        rate_limit_cfg = (
-            RateLimitConfig(**rate_limit_config)
-            if rate_limit_config
-            else RateLimitConfig(requests_per_minute=1000)  # Anthropic default
-        )
-
-        super().__init__(
-            base_url=base_url,
-            api_key=None,  # API key is in headers for Anthropic
-            headers=headers,
-            timeout=timeout,
-            retry_config=retry_cfg,
-            rate_limit_config=rate_limit_cfg,
-            config=config,
-        )
+        self.api_key = api_key
+        self.base_url = base_url
+        self.api_version = api_version
 
         self.default_model = default_model
-        self.api_version = api_version
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.batch_size = batch_size
+        self._client: Optional[AsyncAnthropic] = None
+
+        # Usage statistics tracking
+        self._request_count = 0
+        self._error_count = 0
+
+    async def _initialize(self) -> None:
+        """Initialize Anthropic client."""
+        if self._client is None:
+            self._client = AsyncAnthropic(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+                default_headers={"anthropic-version": self.api_version},
+            )
+
+    async def _cleanup(self) -> None:
+        """Cleanup Anthropic client."""
+        if self._client:
+            await self._client.close()
+            self._client = None
 
     def _format_messages(
         self, messages: List[Message]
@@ -147,6 +160,9 @@ class AnthropicAdapter(BaseHTTPAdapter):
         """
         model = request.model or self.default_model
 
+        if not self._client:
+            await self.initialize()
+
         # Validate model
         if model not in self.SUPPORTED_MODELS:
             raise ModelNotFoundError(
@@ -155,59 +171,77 @@ class AnthropicAdapter(BaseHTTPAdapter):
             )
 
         # Format messages
-        system_message, messages = self._format_messages(request.messages)
+        system_message, formatted_messages = self._format_messages(request.messages)
 
-        # Prepare request payload
-        payload = {
+        # Prepare request parameters
+        completion_kwargs = {
             "model": model,
-            "messages": messages,
+            "messages": formatted_messages,
             "max_tokens": request.max_tokens or 1024,  # Required by Anthropic
             "temperature": request.temperature,
-            "stream": False,
         }
 
         # Add system message if present
         if system_message:
-            payload["system"] = system_message
+            completion_kwargs["system"] = system_message
 
         # Add optional parameters
         if request.top_p is not None:
-            payload["top_p"] = request.top_p
+            completion_kwargs["top_p"] = request.top_p
         if request.stop:
-            payload["stop_sequences"] = request.stop
+            completion_kwargs["stop_sequences"] = request.stop
 
         # Make API request
         try:
-            response = await self._request("POST", "messages", json_data=payload)
+            self._request_count += 1
+            response = await self._client.messages.create(**completion_kwargs)
+        except anthropic.AuthenticationError as e:
+            self._error_count += 1
+            raise AuthenticationError(f"Anthropic authentication failed: {e}") from e
+        except anthropic.RateLimitError as e:
+            self._error_count += 1
+            retry_after = getattr(e, "retry_after", None)
+            raise RateLimitError(
+                f"Anthropic rate limit exceeded: {e}", retry_after=retry_after
+            ) from e
+        except anthropic.NotFoundError as e:
+            self._error_count += 1
+            raise ModelNotFoundError(f"Anthropic model not found: {e}") from e
+        except anthropic.APIError as e:
+            self._error_count += 1
+            raise ProviderError(f"Anthropic API error: {e}") from e
         except Exception as e:
-            raise ProviderError(f"Anthropic API request failed: {e}") from e
+            self._error_count += 1
+            raise ProviderError(f"Anthropic request failed: {e}") from e
 
         # Extract response
         try:
             content = ""
-            for content_block in response.get("content", []):
-                if content_block.get("type") == "text":
-                    content += content_block.get("text", "")
+            for content_block in response.content:
+                if hasattr(content_block, "text"):
+                    content += content_block.text
+
+            usage_dict = None
+            if response.usage:
+                usage_dict = {
+                    "prompt_tokens": response.usage.input_tokens,
+                    "completion_tokens": response.usage.output_tokens,
+                    "total_tokens": response.usage.input_tokens
+                    + response.usage.output_tokens,
+                }
 
             return CompletionResponse(
                 content=content,
-                model=response["model"],
-                finish_reason=response.get("stop_reason"),
-                usage={
-                    "prompt_tokens": response.get("usage", {}).get("input_tokens"),
-                    "completion_tokens": response.get("usage", {}).get("output_tokens"),
-                    "total_tokens": (
-                        response.get("usage", {}).get("input_tokens", 0)
-                        + response.get("usage", {}).get("output_tokens", 0)
-                    ),
-                },
+                model=response.model,
+                finish_reason=response.stop_reason,
+                usage=usage_dict,
                 metadata={
-                    "id": response.get("id"),
-                    "type": response.get("type"),
-                    "role": response.get("role"),
+                    "id": response.id,
+                    "type": response.type,
+                    "role": response.role,
                 },
             )
-        except (KeyError, IndexError) as e:
+        except (AttributeError, TypeError) as e:
             raise ProviderError(f"Invalid Anthropic API response: {e}") from e
 
     async def complete_stream(
@@ -224,6 +258,9 @@ class AnthropicAdapter(BaseHTTPAdapter):
         Raises:
             AdapterError: On API errors
         """
+        if not self._client:
+            await self.initialize()
+
         model = request.model or self.default_model
 
         # Validate model
@@ -234,12 +271,12 @@ class AnthropicAdapter(BaseHTTPAdapter):
             )
 
         # Format messages
-        system_message, messages = self._format_messages(request.messages)
+        system_message, formatted_messages = self._format_messages(request.messages)
 
-        # Prepare request payload
-        payload = {
+        # Prepare request parameters
+        completion_kwargs = {
             "model": model,
-            "messages": messages,
+            "messages": formatted_messages,
             "max_tokens": request.max_tokens or 1024,  # Required by Anthropic
             "temperature": request.temperature,
             "stream": True,
@@ -247,45 +284,58 @@ class AnthropicAdapter(BaseHTTPAdapter):
 
         # Add system message if present
         if system_message:
-            payload["system"] = system_message
+            completion_kwargs["system"] = system_message
 
         # Add optional parameters
         if request.top_p is not None:
-            payload["top_p"] = request.top_p
+            completion_kwargs["top_p"] = request.top_p
         if request.stop:
-            payload["stop_sequences"] = request.stop
+            completion_kwargs["stop_sequences"] = request.stop
 
         # Make streaming API request
         try:
-            async for chunk_data in self._stream_request(
-                "POST", "messages", json_data=payload
-            ):
-                # Parse chunk based on event type
-                try:
-                    event_type = chunk_data.get("type")
-
-                    if event_type == "content_block_delta":
-                        delta = chunk_data.get("delta", {})
-                        if delta.get("type") == "text_delta":
-                            yield StreamChunk(
-                                content=delta.get("text", ""),
-                                metadata={
-                                    "index": chunk_data.get("index"),
-                                },
-                            )
-
-                    elif event_type == "message_stop":
-                        # Final chunk
-                        yield StreamChunk(
-                            content="",
-                            finish_reason="stop",
-                            metadata={"type": "message_stop"},
-                        )
-
-                except (KeyError, IndexError) as e:
-                    logger.warning(f"Invalid stream chunk: {e}")
-                    continue
+            self._request_count += 1
+            async with self._client.messages.stream(**completion_kwargs) as stream:
+                async for chunk in stream:
+                    try:
+                        if hasattr(chunk, "type"):
+                            if chunk.type == "content_block_delta" and hasattr(
+                                chunk, "delta"
+                            ):
+                                if hasattr(chunk.delta, "text"):
+                                    yield StreamChunk(
+                                        content=chunk.delta.text,
+                                        metadata={
+                                            "index": getattr(chunk, "index", 0),
+                                        },
+                                    )
+                            elif chunk.type == "message_stop":
+                                # Final chunk
+                                yield StreamChunk(
+                                    content="",
+                                    finish_reason="stop",
+                                    metadata={"type": "message_stop"},
+                                )
+                    except (AttributeError, TypeError) as e:
+                        logger.warning(f"Invalid stream chunk: {e}")
+                        continue
+        except anthropic.AuthenticationError as e:
+            self._error_count += 1
+            raise AuthenticationError(f"Anthropic authentication failed: {e}") from e
+        except anthropic.RateLimitError as e:
+            self._error_count += 1
+            retry_after = getattr(e, "retry_after", None)
+            raise RateLimitError(
+                f"Anthropic rate limit exceeded: {e}", retry_after=retry_after
+            ) from e
+        except anthropic.NotFoundError as e:
+            self._error_count += 1
+            raise ModelNotFoundError(f"Anthropic model not found: {e}") from e
+        except anthropic.APIError as e:
+            self._error_count += 1
+            raise ProviderError(f"Anthropic API error: {e}") from e
         except Exception as e:
+            self._error_count += 1
             raise ProviderError(f"Anthropic streaming request failed: {e}") from e
 
     async def list_models(self) -> List[str]:
@@ -322,11 +372,18 @@ class AnthropicAdapter(BaseHTTPAdapter):
 
         # Cost per 1M tokens (approximate as of 2024)
         costs = {
+            # Claude 3.5 models
+            "claude-3-5-sonnet-20241022": {"input": 3.0, "output": 15.0},
+            "claude-3-5-sonnet-20240620": {"input": 3.0, "output": 15.0},
+            "claude-3-5-haiku-20241022": {"input": 1.0, "output": 5.0},
+            # Claude 3 models
             "claude-3-opus-20240229": {"input": 15.0, "output": 75.0},
             "claude-3-sonnet-20240229": {"input": 3.0, "output": 15.0},
             "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
+            # Claude 2 models
             "claude-2.1": {"input": 8.0, "output": 24.0},
             "claude-2.0": {"input": 8.0, "output": 24.0},
+            # Claude Instant
             "claude-instant-1.2": {"input": 0.8, "output": 2.4},
         }
 
@@ -343,3 +400,91 @@ class AnthropicAdapter(BaseHTTPAdapter):
         output_cost = (output_tokens / 1_000_000) * cost_info["output"]
 
         return input_cost + output_cost
+
+    async def get_usage_stats(self) -> Dict[str, Any]:
+        """Get usage statistics for this adapter.
+
+        Returns:
+            Dictionary with usage statistics
+        """
+        return {
+            "request_count": self._request_count,
+            "error_count": self._error_count,
+            "error_rate": (
+                self._error_count / self._request_count
+                if self._request_count > 0
+                else 0
+            ),
+        }
+
+    async def batch_complete(
+        self, requests: List[CompletionRequest]
+    ) -> List[Union[CompletionResponse, Exception]]:
+        """Process multiple completion requests with optimized batching.
+
+        For smaller batches (<= batch_size), uses concurrent individual requests.
+        For larger batches, processes in chunks to respect rate limits.
+
+        Args:
+            requests: List of completion requests
+
+        Returns:
+            List of responses or exceptions for each request
+        """
+        if len(requests) <= self.batch_size:
+            # Use concurrent processing for smaller batches
+            return await super().batch_complete(requests)
+
+        # Process larger batches in chunks
+        return await self._batch_complete_chunked(requests)
+
+    async def _batch_complete_chunked(
+        self, requests: List[CompletionRequest]
+    ) -> List[Union[CompletionResponse, Exception]]:
+        """Process requests in chunks to manage rate limits.
+
+        Args:
+            requests: List of completion requests
+
+        Returns:
+            List of responses or exceptions for each request
+        """
+        results = []
+
+        # Process in chunks of batch_size
+        for i in range(0, len(requests), self.batch_size):
+            chunk = requests[i : i + self.batch_size]
+
+            try:
+                # Process chunk concurrently
+                tasks = [self._safe_complete(req) for req in chunk]
+                chunk_results = await asyncio.gather(*tasks, return_exceptions=True)
+                results.extend(chunk_results)
+
+                # Small delay between chunks to help with rate limiting
+                if i + self.batch_size < len(requests):
+                    await asyncio.sleep(0.1)
+
+            except Exception as e:
+                # If batch processing fails, add exceptions for all requests in chunk
+                chunk_exceptions = [
+                    ProviderError(f"Batch processing failed: {e}") for _ in chunk
+                ]
+                results.extend(chunk_exceptions)
+
+        return results
+
+    async def _safe_complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Wrapper for safe completion execution.
+
+        Args:
+            request: Completion request
+
+        Returns:
+            Completion response
+        """
+        try:
+            return await self.complete(request)
+        except Exception as e:
+            logger.error(f"Error in completion: {e}")
+            raise

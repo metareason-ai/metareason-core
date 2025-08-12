@@ -11,6 +11,7 @@ class AdapterType(str, Enum):
 
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    GOOGLE = "google"
     AZURE_OPENAI = "azure_openai"
     HUGGINGFACE = "huggingface"
     OLLAMA = "ollama"
@@ -158,6 +159,12 @@ class OpenAIConfig(BaseAdapterConfig):
     organization_id: Optional[str] = Field(None, description="OpenAI organization ID")
     api_version: Optional[str] = Field(None, description="API version to use")
     default_model: str = Field(default="gpt-3.5-turbo", description="Default model")
+    batch_size: int = Field(
+        default=20,
+        ge=1,
+        le=1000,
+        description="Maximum requests per batch for batch processing",
+    )
 
 
 class AnthropicConfig(BaseAdapterConfig):
@@ -207,6 +214,43 @@ class HuggingFaceConfig(BaseAdapterConfig):
     )
 
 
+class GoogleConfig(BaseAdapterConfig):
+    """Configuration for Google Gemini adapter."""
+
+    type: Literal[AdapterType.GOOGLE] = AdapterType.GOOGLE
+    base_url: str = Field(
+        default="https://generativelanguage.googleapis.com/v1",
+        description="Google GenAI API base URL",
+    )
+    api_version: str = Field(default="v1", description="API version")
+    default_model: str = Field(
+        default="gemini-2.0-flash-001", description="Default model"
+    )
+    use_vertex_ai: bool = Field(
+        default=False,
+        description="Use Vertex AI endpoint instead of Gemini Developer API",
+    )
+    project_id: Optional[str] = Field(
+        None, description="Google Cloud project ID (required for Vertex AI)"
+    )
+    location: Optional[str] = Field(
+        default="us-central1", description="Google Cloud location (for Vertex AI)"
+    )
+    batch_size: int = Field(
+        default=20,
+        ge=1,
+        le=1000,
+        description="Maximum requests per batch for batch processing",
+    )
+
+    @model_validator(mode="after")
+    def validate_vertex_ai_config(self) -> "GoogleConfig":
+        """Validate Vertex AI configuration."""
+        if self.use_vertex_ai and not self.project_id:
+            raise ValueError("project_id is required when use_vertex_ai=True")
+        return self
+
+
 class OllamaConfig(BaseAdapterConfig):
     """Configuration for Ollama adapter."""
 
@@ -239,6 +283,7 @@ class CustomAdapterConfig(BaseAdapterConfig):
 AdapterConfigType = Union[
     OpenAIConfig,
     AnthropicConfig,
+    GoogleConfig,
     AzureOpenAIConfig,
     HuggingFaceConfig,
     OllamaConfig,
