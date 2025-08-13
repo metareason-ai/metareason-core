@@ -71,11 +71,22 @@ metareason templates generate examples/simple_evaluation.yaml --output templates
 # Run evaluation (dry run)
 metareason run --spec-file examples/simple_evaluation.yaml --dry-run
 
-# Run evaluation with output
+# Run evaluation with JSON output
 metareason run --spec-file examples/simple_evaluation.yaml --output results.json
+
+# Run evaluation with multiple output formats
+metareason run --spec-file examples/simple_evaluation.yaml --format dashboard --output-dir ./results
+metareason run --spec-file examples/simple_evaluation.yaml --format csv --output results.csv
+metareason run --spec-file examples/simple_evaluation.yaml --format parquet --output results.parquet
+
+# Run with concurrency control
+metareason run --spec-file examples/simple_evaluation.yaml --max-concurrent 5
 
 # Quick start with local models
 metareason run --spec-file examples/google_quickstart.yaml --dry-run
+
+# Bayesian analysis with comprehensive results
+metareason run --spec-file examples/bayesian_config_example.yaml --format dashboard --output-dir ./bayesian_results
 ```
 
 ## Project Architecture
@@ -85,11 +96,14 @@ MetaReason Core is a statistical evaluation framework for Large Language Models 
 ### Core Architecture
 - **CLI Module** (`metareason.cli`): Command-line interface using Click framework
 - **Config Module** (`metareason.config`): YAML-based configuration with Pydantic validation
+- **Pipeline Module** (`metareason.pipeline`): End-to-end evaluation pipeline execution and orchestration
 - **Sampling Module** (`metareason.sampling`): Latin Hypercube Sampling and optimization strategies
-- **Oracles Module** (`metareason.oracles`): Evaluation criteria including LLM-as-Judge, quality assurance, and custom metrics
-- **Analysis Module** (`metareason.analysis`): Bayesian statistical analysis with PyMC
-- **Adapters Module** (`metareason.adapters`): LLM provider integrations (OpenAI, Anthropic, Ollama)
+- **Oracles Module** (`metareason.oracles`): Evaluation criteria including LLM-as-Judge, embedding similarity, and quality assurance
+- **Analysis Module** (`metareason.analysis`): Bayesian statistical analysis with PyMC integration
+- **Adapters Module** (`metareason.adapters`): LLM provider integrations (OpenAI, Anthropic, Google, Ollama)
 - **Templates Module** (`metareason.templates`): Jinja2-based prompt generation and rendering
+- **Results Module** (`metareason.results`): Result formatting, export, and dashboard generation
+- **Visualization Module** (`metareason.visualization`): Statistical plots and analysis visualizations
 - **Utils Module** (`metareason.utils`): Shared utilities and helpers
 
 ### Key Design Patterns
@@ -99,13 +113,15 @@ MetaReason Core is a statistical evaluation framework for Large Language Models 
 - **Statistical Rigor**: Built-in Bayesian confidence intervals and uncertainty quantification
 
 ### YAML Configuration Schema
-The project uses a declarative YAML format for evaluation specifications:
-- **Pipeline Steps**: Self-contained stages with templates, model configs, and variable axes
-- **Template per Step**: Jinja2-compatible with variable substitution for each pipeline step
-- **Axes per Step**: Categorical and continuous parameter distributions specific to each step
-- **Sampling Configuration**: Latin Hypercube with optimization criteria
-- **Oracle Definitions**: Multiple evaluation criteria (LLM-as-judge, quality assurance, embedding similarity, custom)
-- **Statistical Configuration**: Bayesian inference settings
+The project uses a declarative YAML format for evaluation specifications with pipeline-based architecture:
+- **Pipeline Steps**: Multi-stage evaluation workflows with templates, adapter configs, and variable axes per step
+- **Template per Step**: Jinja2-compatible templates with variable substitution and cross-stage references
+- **Axes per Step**: Categorical and continuous parameter distributions with weights and constraints
+- **Sampling Configuration**: Latin Hypercube Sampling with optimization criteria (maximin, centermaximin, correlation)
+- **Oracle Definitions**: Multiple evaluation criteria (LLM-as-Judge, embedding similarity, quality assurance, custom metrics)
+- **Statistical Configuration**: Complete Bayesian inference with PyMC (Beta-Binomial models, MCMC sampling, credible intervals)
+- **Results Configuration**: Export formats (JSON, CSV, Parquet, HTML dashboard) and visualization options
+- **Metadata and Domain Context**: Version control, domain-specific settings, and compliance tracking
 
 ### Adapter System
 The project includes a comprehensive adapter system for LLM providers:
@@ -113,6 +129,7 @@ The project includes a comprehensive adapter system for LLM providers:
 #### Supported Providers
 - **OpenAI**: Full API integration with rate limiting and retry logic
 - **Anthropic**: Complete Claude API support with async operations
+- **Google**: Complete Gemini API integration with structured output support
 - **Ollama**: Local model serving with support for Llama, Mistral, Gemma, and other open-source models
 - **Azure OpenAI**: Configuration ready (implementation planned)
 - **HuggingFace**: Configuration ready (implementation planned)
@@ -126,10 +143,9 @@ The project includes a comprehensive adapter system for LLM providers:
 - **Privacy Protection**: Built-in data sanitization and privacy-safe logging
 - **Local Model Support**: Full support for local model serving via Ollama
 
-#### Configuration
+#### Configuration Examples
 ```yaml
-adapters:
-  # Single-stage pipeline with cloud model
+# Single-stage pipeline with cloud models
 spec_id: cloud_evaluation
 pipeline:
   - template: "Analyze {{topic}} with {{approach}}"
@@ -144,23 +160,56 @@ pipeline:
         type: categorical
         values: ["technical", "business"]
 
-# Multi-stage pipeline with local models
-spec_id: local_multi_stage
+# Multi-stage pipeline with mixed adapters
+spec_id: mixed_adapter_pipeline
 pipeline:
   - template: "Summarize {{text}}"
-    adapter: ollama
-    model: llama3
+    adapter: google
+    model: gemini-pro
+    temperature: 0.3
     axes:
       text:
         type: categorical
         values: ["doc1.txt", "doc2.txt"]
   - template: "Analyze: {{stage_1_output}} using {{method}}"
     adapter: ollama
-    model: mistral
+    model: llama3
     axes:
       method:
         type: categorical
         values: ["critical", "supportive"]
+
+# Complete evaluation with oracles and statistical analysis
+spec_id: comprehensive_evaluation
+pipeline:
+  - template: "Explain {{concept}} in {{style}} terms"
+    adapter: anthropic
+    model: claude-3-sonnet-20240229
+    temperature: 0.5
+    axes:
+      concept:
+        type: categorical
+        values: ["machine learning", "neural networks"]
+      style:
+        type: categorical
+        values: ["technical", "simple"]
+
+oracles:
+  accuracy:
+    type: embedding_similarity
+    canonical_answer: "A comprehensive explanation covering fundamentals"
+    threshold: 0.85
+  clarity:
+    type: llm_judge
+    rubric: "Rate clarity from 1-5"
+    judge_model: gpt-4
+
+statistical_config:
+  model: beta_binomial
+  inference:
+    method: mcmc
+    samples: 4000
+    chains: 4
 ```
 
 ### Privacy and Local Model Support
@@ -179,9 +228,9 @@ The framework includes comprehensive privacy protection and local model evaluati
 - **Popular Models**: Pre-configured support for Llama, Mistral, Gemma, CodeLlama, and other open-source models
 - **Privacy-First**: Local processing ensures maximum data privacy and sovereignty
 
-#### Example Configurations
+#### Example Privacy-Focused Configuration
 ```yaml
-# Privacy-focused local evaluation
+# Privacy-focused local evaluation with embedding similarity
 spec_id: privacy_evaluation
 pipeline:
   - template: "Evaluate {{content}} for {{criteria}}"
@@ -191,26 +240,47 @@ pipeline:
     axes:
       content:
         type: categorical
-        values: ["sample1", "sample2"]
+        values: ["sensitive_doc1", "sensitive_doc2"]
       criteria:
         type: categorical
-        values: ["accuracy", "clarity"]
+        values: ["accuracy", "completeness", "clarity"]
+
+n_variants: 200
 
 oracles:
   quality:
     type: llm_judge
-    rubric: "Rate response quality from 1-5."
+    rubric: "Rate response quality from 1-5 based on accuracy and clarity."
     judge_model: llama3
+    temperature: 0.0
+  similarity:
+    type: embedding_similarity
+    canonical_answer: "High-quality evaluation should be comprehensive and accurate."
+    threshold: 0.8
+    embedding_model: text-embedding-3-small  # Only used locally via Ollama
+
+statistical_config:
+  model: beta_binomial
+  inference:
+    method: mcmc
+    samples: 2000
+    chains: 2
+
+domain_context:
+  data_sensitivity: confidential
+  compliance_requirements: ["GDPR", "HIPAA"]
 ```
 
 ### Development Workflow
 1. **Configuration Management**: All evaluations start with YAML configuration files
 2. **Template Generation**: Jinja2 templates with variable substitution generate prompts
 3. **Sampling Strategy**: Latin Hypercube Sampling generates parameter space coverage
-4. **LLM Interaction**: Adapters handle API calls with rate limiting and retries
-5. **Oracle Evaluation**: Multiple oracles provide different quality assessments
-6. **Statistical Analysis**: Bayesian models quantify confidence and uncertainty
-7. **Results Output**: Rich console output and structured data formats
+4. **Pipeline Execution**: Orchestrated multi-stage evaluation with dependency management
+5. **LLM Interaction**: Adapters handle API calls with rate limiting and retries
+6. **Oracle Evaluation**: Multiple oracles provide different quality assessments (LLM-as-Judge, embedding similarity)
+7. **Statistical Analysis**: Bayesian models with PyMC quantify confidence and uncertainty
+8. **Results Export**: Multiple output formats (JSON, CSV, Parquet, HTML dashboard)
+9. **Visualization**: Statistical plots and analysis charts for comprehensive reporting
 
 ### Testing Strategy
 - **Unit Tests**: Individual component testing with pytest
@@ -335,12 +405,15 @@ The project is in active development (v0.1.0) with the following features comple
 
 #### ✅ Completed Features
 - **YAML-based evaluation specifications**: Complete configuration system with Pydantic validation
+- **Pipeline-based evaluation architecture**: Multi-stage pipeline execution with dependency management
 - **Latin Hypercube Sampling implementation**: Full LHS with optimization strategies and metrics
 - **Configuration validation and loading**: Comprehensive YAML loading with includes, environment variables, and caching
-- **CLI interface foundation**: Complete command-line interface with config validation and templating commands
-- **Adapter system**: Full adapter architecture with OpenAI, Anthropic, and Ollama implementations
+- **CLI interface**: Complete command-line interface with pipeline execution and multiple output formats
+- **Adapter system**: Full adapter architecture with OpenAI, Anthropic, Google, and Ollama implementations
 - **Template system**: Jinja2-based prompt generation with custom filters and batch rendering
-- **Oracle framework**: LLM-as-Judge oracle with structured evaluation responses
+- **Oracle framework**: Complete oracle implementations (LLM-as-Judge, embedding similarity, quality assurance)
+- **Bayesian analysis integration**: Full PyMC integration with MCMC sampling and confidence intervals
+- **Results export and visualization**: Multiple output formats (JSON, CSV, Parquet, HTML dashboard) with statistical plots
 - **Privacy utilities**: Data sanitization and privacy-safe logging for sensitive information
 - **Local model support**: Complete Ollama integration for privacy-focused local evaluation
 - **Test infrastructure**: Robust ConfigBuilder, factories, and fixtures eliminating test brittleness
@@ -348,12 +421,16 @@ The project is in active development (v0.1.0) with the following features comple
 - **Comprehensive testing**: 30+ test files with 80%+ coverage requirement and maintainable test patterns
 
 #### 🚧 In Development
-- **Advanced oracle implementations**: Embedding similarity and custom evaluation metrics
-- **Bayesian analysis integration**: Framework ready, PyMC integration pending
-- **End-to-end evaluation pipeline**: Complete workflow from configuration to results
+- **Azure OpenAI adapter**: Configuration schema ready, implementation planned
+- **HuggingFace adapter**: Configuration schema ready, implementation planned
+- **Advanced visualization**: Interactive dashboards and real-time monitoring
+- **Performance optimization**: Caching strategies and parallel execution improvements
 
 #### 📁 Project Structure
-- **Core Modules**: All foundational modules implemented and tested
-- **Configuration Schema**: Complete support for adapters, distributions, sampling, and statistical analysis
-- **LLM Integrations**: OpenAI, Anthropic, and Ollama adapters with rate limiting, retry logic, and privacy protection
-- **Development Workflow**: Full CI/CD setup with testing, formatting, and security checks
+- **Core Modules**: All foundational modules implemented and tested (CLI, Config, Pipeline, Sampling, Oracles, Analysis)
+- **Configuration Schema**: Complete pipeline-based YAML format with statistical analysis and results export
+- **LLM Integrations**: OpenAI, Anthropic, Google, and Ollama adapters with rate limiting, retry logic, and privacy protection
+- **Evaluation Pipeline**: End-to-end execution from configuration to statistical analysis and visualization
+- **Results System**: Multi-format export (JSON, CSV, Parquet, HTML dashboard) with comprehensive reporting
+- **Statistical Analysis**: Full Bayesian inference with PyMC, confidence intervals, and convergence diagnostics
+- **Development Workflow**: Complete CI/CD setup with testing, formatting, security checks, and 80%+ coverage
