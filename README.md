@@ -24,40 +24,95 @@ MetaReason Core is the open-source evaluation engine that transforms LLM outputs
 pip install metareason-core
 
 # Run your first evaluation
-metareason evaluate examples/financial-qa.yaml
+metareason run --spec-file examples/pipeline_demo.yaml
 
-# View results
-metareason report --latest
+# Generate execution plan (dry run)
+metareason run --spec-file examples/pipeline_demo.yaml --dry-run
+
+# Export results with visualization dashboard
+metareason run --spec-file examples/pipeline_demo.yaml --output-dir results --format dashboard
 ```
 
 ## 📋 Features
 
 ### ✅ Available Now (v0.1.0)
 
-- **YAML-based evaluation specifications** - Declarative configuration for evaluation workflows
+- **Complete evaluation pipeline** - End-to-end execution with multi-step workflows and dependency management
+- **Pipeline-based configuration** - Multi-step YAML specifications with stage-to-stage variable passing
+- **Bayesian statistical analysis** - Full PyMC integration with credible intervals and uncertainty quantification
 - **Latin Hypercube Sampling** - Optimized parameter space exploration with statistical guarantees
-- **Jinja2 template system** - Flexible prompt generation with custom filters ([docs](docs/templating-guide.md))
-- **Embedding similarity oracle** - Semantic accuracy scoring with 4 similarity methods, batch processing, and performance optimization
-- **LLM-as-Judge oracle** - Explainability scoring with robust JSON parsing and multiple output formats
-- **Multi-provider LLM adapters** - OpenAI, Anthropic, Ollama, with built-in rate limiting and privacy protection
-- **CLI interface** - Configuration validation, template generation, and rich console output
+- **Results export & visualization** - Dashboard generation, JSON/CSV/Parquet export, HTML reports
+- **Advanced oracle suite** - Embedding similarity, LLM-as-Judge, quality assurance with batch processing
+- **Multi-provider LLM adapters** - OpenAI, Anthropic, Google/Gemini, Ollama with rate limiting and privacy protection
+- **Jinja2 template system** - Flexible prompt generation with custom filters and security validation
+- **Rich CLI interface** - Configuration validation, template rendering, execution planning, and interactive output
 
 ### 🔄 In Development (v1.1)
 
-- Bayesian confidence intervals via PyMC
-- End-to-end evaluation pipeline integration
-- Detailed reporting and visualization
+- Custom oracle development framework
 - Multi-model comparison workflows
+- Performance benchmarking suite
+- Real-time monitoring integration
 
 ### 🎯 Planned Features (v2.0)
 
-- Custom oracle development framework
-- Performance benchmarking suite
 - Docker containerization
-- Real-time monitoring integration
 - Drift detection algorithms
 - Automated remediation workflows
 - Enterprise dashboard API
+- Advanced model comparison analytics
+- A/B testing frameworks
+
+## 📝 Configuration Examples
+
+### Pipeline-Based Configuration
+
+```yaml
+# Multi-step evaluation pipeline
+spec_id: advanced_analysis
+pipeline:
+  # Stage 1: Initial response generation
+  - template: "Analyze {{topic}} from a {{perspective}} perspective"
+    adapter: ollama
+    model: llama3
+    temperature: 0.7
+    axes:
+      topic:
+        type: categorical
+        values: ["AI ethics", "quantum computing", "climate tech"]
+      perspective:
+        type: categorical
+        values: ["technical", "business", "social"]
+
+  # Stage 2: Follow-up analysis using previous output
+  - template: "Based on: {{stage_1_output}}\n\nEvaluate {{criteria}} implications"
+    adapter: openai
+    model: gpt-4
+    axes:
+      criteria:
+        type: categorical
+        values: ["economic impact", "ethical considerations", "future risks"]
+
+# Statistical analysis with Bayesian inference
+statistical_config:
+  model: beta_binomial
+  inference:
+    method: mcmc
+    samples: 2000
+    chains: 4
+
+# Multiple oracle evaluation
+oracles:
+  similarity:
+    type: embedding_similarity
+    canonical_answer: "Comprehensive analysis covering technical foundations and implications"
+    threshold: 0.8
+
+  quality:
+    type: llm_judge
+    rubric: "Rate clarity and depth from 1-5"
+    judge_model: gpt-4
+```
 
 ### 📖 Documentation
 
@@ -109,15 +164,19 @@ metareason report --latest
 ```
 metareason-core/
 ├── src/metareason/
-│   ├── config/        # Configuration management
-│   ├── sampling/      # Sampling strategies
-│   ├── oracles/       # Oracle implementations
-│   ├── analysis/      # Analysis tools
-│   ├── adapters/      # LLM provider adapters
-│   ├── cli/           # Command-line interface
-│   └── utils/         # Utility functions
-├── tests/             # Test suite
-├── examples/          # Example usage
+│   ├── analysis/      # Bayesian statistical analysis (PyMC)
+│   ├── adapters/      # LLM provider adapters (OpenAI, Anthropic, Google, Ollama)
+│   ├── cli/           # Command-line interface with rich output
+│   ├── config/        # Configuration management and validation
+│   ├── oracles/       # Oracle implementations (embedding, LLM-judge, QA)
+│   ├── pipeline/      # Evaluation pipeline execution and management
+│   ├── results/       # Results export and formatting
+│   ├── sampling/      # Latin Hypercube Sampling strategies
+│   ├── templates/     # Jinja2 template system with security
+│   ├── utils/         # Utility functions
+│   └── visualization/ # Dashboard and plot generation
+├── tests/             # Comprehensive test suite
+├── examples/          # Example configurations and demos
 ├── docs/              # Documentation
 └── pyproject.toml     # Project configuration
 ```
@@ -136,6 +195,34 @@ pytest tests/test_version.py
 
 # Run tests in parallel
 pytest -n auto
+```
+
+### CLI Examples
+
+```bash
+# System information
+metareason info
+
+# Configuration management
+metareason config validate examples/pipeline_demo.yaml
+metareason config show examples/pipeline_demo.yaml
+metareason config diff examples/simple_evaluation.yaml examples/advanced_evaluation.yaml
+
+# Template operations
+metareason template render examples/pipeline_demo.yaml
+metareason template validate examples/pipeline_demo.yaml
+metareason template filters
+
+# Run evaluations with different outputs
+metareason run --spec-file examples/pipeline_demo.yaml --dry-run
+metareason run --spec-file examples/pipeline_demo.yaml --output results.json
+metareason run --spec-file examples/bayesian_config_example.yaml --output-dir analysis --format dashboard
+
+# Local model evaluation (privacy-focused)
+metareason run --spec-file examples/local_ollama_evaluation.yaml --verbose
+
+# Google/Gemini evaluation
+metareason run --spec-file examples/google_quickstart.yaml --max-concurrent 5
 ```
 
 ### Code Quality
