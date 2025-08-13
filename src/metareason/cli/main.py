@@ -157,7 +157,6 @@ def run(
 ) -> None:
     """Run an evaluation using the specified specification file."""
     import asyncio
-
     from metareason.config import load_yaml_config
     from metareason.pipeline import PipelineRunner
     from metareason.results import ResultExporter, ResultFormatter
@@ -249,6 +248,7 @@ def run(
             import traceback
 
             console.print("[red]" + traceback.format_exc() + "[/red]")
+            
         sys.exit(1)
 
 
