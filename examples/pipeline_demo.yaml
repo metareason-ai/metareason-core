@@ -1,0 +1,70 @@
+# Example pipeline configuration demonstrating the complete evaluation workflow
+spec_id: pipeline_demo_example
+
+# Multi-step pipeline
+pipeline:
+  # Step 1: Initial analysis
+  - template: "Analyze the concept of {{topic}} from a {{perspective}} perspective. Provide a clear explanation."
+    adapter: ollama
+    model: llama3
+    temperature: 0.7
+    axes:
+      topic:
+        type: categorical
+        values: ["artificial intelligence", "quantum computing", "renewable energy"]
+      perspective:
+        type: categorical
+        values: ["technical", "business", "ethical"]
+
+  # Step 2: Follow-up questions based on first response
+  - template: "Based on this analysis: {{stage_1_output}}\n\nNow evaluate the {{evaluation_criteria}} implications in detail."
+    adapter: ollama
+    model: llama3
+    temperature: 0.5
+    axes:
+      evaluation_criteria:
+        type: categorical
+        values: ["economic", "social", "environmental"]
+
+# Sampling configuration
+n_variants: 100
+sampling:
+  method: latin_hypercube
+  optimization_criterion: maximin
+  random_seed: 42
+
+# Oracle evaluation
+oracles:
+  accuracy:
+    type: embedding_similarity
+    canonical_answer: "A comprehensive analysis should cover technical foundations, practical applications, current challenges, and future implications."
+    threshold: 0.75
+    method: cosine_similarity
+    embedding_model: text-embedding-3-small
+
+  explainability:
+    type: llm_judge
+    rubric: "Rate how well the response explains complex concepts clearly from 1-5. Consider: 1. Use of clear language 2. Logical structure 3. Examples provided 4. Accessibility to non-experts 5. Overall comprehensiveness"
+    judge_model: llama3
+    temperature: 0.1
+    output_format: score
+
+# Statistical analysis configuration
+statistical_config:
+  model: beta_binomial
+  prior:
+    alpha: 1.0
+    beta: 1.0
+  inference:
+    method: mcmc
+    samples: 2000
+    chains: 4
+    target_accept: 0.95
+  output:
+    credible_interval: 0.95
+
+# Metadata
+metadata:
+  version: "1.0.0"
+  created_by: "pipeline_demo"
+  tags: ["demo", "multi-step", "local-model"]

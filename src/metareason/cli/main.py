@@ -124,49 +124,146 @@ def info(ctx: click.Context, output_format: str) -> None:
     help="Output file for results",
 )
 @click.option(
+    "--output-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    help="Output directory for results and dashboard",
+)
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["json", "csv", "parquet", "html", "dashboard"]),
+    default="json",
+    help="Output format",
+)
+@click.option(
     "--dry-run", is_flag=True, help="Show what would be done without executing"
 )
+@click.option(
+    "--max-concurrent",
+    default=10,
+    help="Maximum concurrent requests",
+)
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.pass_context
 def run(
-    ctx: click.Context, spec_file: Path, output: Optional[Path], dry_run: bool
+    ctx: click.Context,
+    spec_file: Path,
+    output: Optional[Path],
+    output_dir: Optional[Path],
+    output_format: str,
+    dry_run: bool,
+    max_concurrent: int,
+    verbose: bool,
 ) -> None:
     """Run an evaluation using the specified specification file."""
+    import asyncio
     from metareason.config import load_yaml_config
+    from metareason.pipeline import PipelineRunner
+    from metareason.results import ResultExporter, ResultFormatter
+    from metareason.visualization import ResultVisualizer
+
+    if verbose:
+        import logging
+
+        logging.basicConfig(level=logging.INFO)
 
     try:
+        # Load configuration
         config = load_yaml_config(spec_file)
+        console.print(f"📄 [bold]Loaded specification:[/bold] {config.spec_id}")
+
+        # Create pipeline runner
+        runner = PipelineRunner(config, max_concurrent=max_concurrent)
 
         if dry_run:
-            console.print("[dim]Would run evaluation with specification:[/dim]")
-            console.print(f"📄 Spec: {spec_file}")
-            console.print(f"🎯 Spec ID: {config.spec_id}")
-            console.print(f"🔢 Variants: {config.n_variants}")
-            console.print(
-                f"📊 Sampling: {config.sampling.method if config.sampling else 'None'}"
-            )
-            console.print(f"🔧 Pipeline Steps: {len(config.pipeline)}")
-            for i, step in enumerate(config.pipeline, 1):
-                console.print(
-                    f"   Step {i}: {step.adapter}/{step.model} ({len(step.axes)} axes)"
-                )
-            oracles = [
-                config.oracles.accuracy,
-                config.oracles.explainability,
-                config.oracles.confidence_calibration,
-            ]
-            console.print(f"🔍 Oracles: {len([o for o in oracles if o])}")
-            if output:
-                console.print(f"💾 Output: {output}")
-        else:
-            console.print("🚀 [bold green]Running evaluation...[/bold green]")
-            # TODO: Implement actual evaluation logic
-            console.print(
-                "⚠️  [yellow]Evaluation execution not yet implemented[/yellow]"
-            )
+            # Create and display execution plan
+            console.print("🗓️  [bold blue]Creating execution plan...[/bold blue]")
+            plan = asyncio.run(runner.create_execution_plan())
+
+            formatter = ResultFormatter(console)
+            plan_text = formatter.format_execution_plan(plan)
+            console.print(plan_text)
+            return
+
+        # Run the evaluation
+        console.print("🚀 [bold green]Starting evaluation pipeline...[/bold green]")
+
+        with console.status("[bold green]Running evaluation..."):
+            result = asyncio.run(runner.run())
+
+        # Display summary
+        console.print("\n" + "=" * 60)
+        formatter = ResultFormatter(console)
+        summary_text = formatter.format_summary(result)
+        console.print(summary_text)
+
+        # Display detailed tables
+        if verbose:
+            console.print(formatter.create_summary_table(result))
+            console.print(formatter.create_step_results_table(result))
+            if result.oracle_results:
+                console.print(formatter.create_oracle_results_table(result))
+
+        # Export results
+        if output or output_dir:
+            console.print("\n💾 [bold blue]Exporting results...[/bold blue]")
+            exporter = ResultExporter()
+
+            if output_dir:
+                # Create output directory
+                output_dir.mkdir(parents=True, exist_ok=True)
+
+                if output_format == "dashboard":
+                    # Generate complete dashboard
+                    visualizer = ResultVisualizer()
+                    dashboard_path = visualizer.generate_dashboard(result, output_dir)
+                    console.print(f"📊 Dashboard saved to: {dashboard_path}")
+
+                    # Also save JSON for data access
+                    json_path = output_dir / "results.json"
+                    exporter.export_json(result, json_path)
+                    console.print(f"📄 Raw data saved to: {json_path}")
+                else:
+                    # Export to specified format in directory
+                    file_name = f"results.{output_format}"
+                    result_path = output_dir / file_name
+                    _export_result(exporter, result, result_path, output_format)
+                    console.print(f"💾 Results saved to: {result_path}")
+
+            elif output:
+                # Export to specific file
+                _export_result(exporter, result, output, output_format)
+                console.print(f"💾 Results saved to: {output}")
+
+        console.print(
+            "\n✅ [bold green]Evaluation completed successfully![/bold green]"
+        )
+        console.print(
+            f"📊 Overall success rate: [bold]{result.overall_success_rate:.1%}[/bold]"
+        )
 
     except Exception as e:
-        console.print(f"❌ [red]Error loading specification:[/red] {e}")
+        console.print(f"\n❌ [red]Error during evaluation:[/red] {e}")
+        if verbose:
+            import traceback
+
+            console.print("[red]" + traceback.format_exc() + "[/red]")
+            
         sys.exit(1)
+
+
+def _export_result(exporter, result, path: Path, format: str) -> None:
+    """Export result to specified format."""
+    if format == "json":
+        exporter.export_json(result, path)
+    elif format == "csv":
+        exporter.export_csv(result, path)
+    elif format == "parquet":
+        exporter.export_parquet(result, path)
+    elif format == "html":
+        exporter.export_html_report(result, path)
+    else:
+        raise ValueError(f"Unsupported format: {format}")
 
 
 if __name__ == "__main__":
