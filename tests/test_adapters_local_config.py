@@ -6,10 +6,7 @@ import pytest
 import yaml
 from aiohttp import ClientConnectorError
 
-from metareason.adapters.local_config import (
-    ConfigurationManager,
-    LocalSetupValidator,
-)
+from metareason.adapters.local_config import ConfigurationManager, LocalSetupValidator
 
 
 class TestLocalSetupValidator:
