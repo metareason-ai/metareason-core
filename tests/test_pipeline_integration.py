@@ -78,9 +78,9 @@ class TestPipelineRunner:
         plan = await runner.create_execution_plan()
 
         assert plan.config == simple_config
-        assert plan.estimated_samples == 10
-        assert plan.estimated_prompts == 10  # 10 samples * 1 step
-        assert plan.estimated_api_calls == 10
+        assert plan.estimated_samples == 100
+        assert plan.estimated_prompts == 100  # 100 samples * 1 step
+        assert plan.estimated_api_calls == 100
         assert len(plan.steps) == 1
         assert plan.steps[0]["adapter"] == "ollama"
         assert plan.steps[0]["model"] == "llama3"
@@ -92,8 +92,8 @@ class TestPipelineRunner:
         samples = await runner._generate_samples()
 
         assert isinstance(samples, SampleResult)
-        assert samples.samples.shape[0] == 10  # n_variants
-        assert samples.metadata["n_samples"] == 10
+        assert samples.samples.shape[0] == 100  # n_variants
+        assert samples.metadata["n_samples"] == 100
         assert "variable" in samples.metadata.get("axis_names", [])
 
     def test_samples_to_contexts(self, simple_config):
@@ -116,7 +116,7 @@ class TestPipelineRunner:
         assert contexts[2] == {"variable": "C"}
 
     @pytest.mark.asyncio
-    @patch("metareason.pipeline.runner.AdapterFactory")
+    @patch("metareason.pipeline.executor.AdapterFactory")
     async def test_pipeline_execution_flow(
         self, mock_adapter_factory, simple_config, mock_adapter, mock_oracle
     ):

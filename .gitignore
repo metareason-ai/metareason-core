@@ -227,3 +227,4 @@ config/local.yaml
 !.vscode/launch.json
 
 .claude/
+.scratch/

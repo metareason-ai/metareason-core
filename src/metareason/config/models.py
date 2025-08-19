@@ -212,7 +212,7 @@ class EvaluationConfig(BaseModel):
     )
     n_variants: int = Field(
         default=1000,
-        ge=100,
+        ge=10,
         le=10000,
         description="Number of prompt variants to generate",
     )
@@ -252,7 +252,7 @@ class EvaluationConfig(BaseModel):
     def validate_pipeline_not_empty(cls, v: List[PipelineStep]) -> List[PipelineStep]:
         if not v:
             raise ValueError(
-                "Pipeline cannot be empty. Define at least " "one pipeline step."
+                "Pipeline cannot be empty. Define at least one pipeline step."
             )
         return v
 
