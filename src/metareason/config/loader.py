@@ -58,7 +58,7 @@ def load_yaml_config(
             return cached_config
 
     # Validate file extension
-    if not path.suffix.lower() in {".yaml", ".yml"}:
+    if path.suffix.lower() not in {".yaml", ".yml"}:
         raise ValueError(
             f"Invalid file extension: {path.suffix}. "
             f"Suggestion: Use .yaml or .yml extension for configuration files."

@@ -204,7 +204,7 @@ class TestEvaluationConfig:
                 .single_step(
                     template="Hello {{name}}, this is a longer template", name=["a"]
                 )
-                .with_variants(50)  # Too low
+                .with_variants(2)  # Too low
                 .with_oracle(
                     "accuracy",
                     lambda o: o.embedding_similarity("test answer", threshold=0.85),
@@ -213,7 +213,7 @@ class TestEvaluationConfig:
             )
 
         error_msg = str(exc_info.value)
-        assert "greater than or equal to 100" in error_msg
+        assert "greater than or equal to 10" in error_msg
 
     def test_high_n_variants_fails(self) -> None:
         """Test that too many variants fails validation."""
@@ -855,7 +855,7 @@ class TestCrossFieldValidation:
                         },  # 3*2 = 6 combinations
                     },
                 )
-                .with_variants(50)  # This should fail the ge=100 constraint first
+                .with_variants(2)  # This should fail the ge=10 constraint first
                 .with_oracle(
                     "accuracy",
                     lambda o: o.embedding_similarity(
@@ -867,7 +867,7 @@ class TestCrossFieldValidation:
 
         error_msg = str(exc_info.value)
         # This will fail on the ge=100 constraint first
-        assert "greater than or equal to 100" in error_msg
+        assert "greater than or equal to 10" in error_msg
 
 
 class TestMetadataValidation:
@@ -918,8 +918,8 @@ class TestErrorMessageQuality:
                 ["lowercase letters"],  # Custom validation
             ),
             (
-                lambda: (ConfigBuilder().minimal().with_variants(50)),
-                ["greater than or equal to 100"],  # Built-in Pydantic validation
+                lambda: (ConfigBuilder().minimal().with_variants(2)),
+                ["greater than or equal to 10"],  # Built-in Pydantic validation
             ),
         ]
 

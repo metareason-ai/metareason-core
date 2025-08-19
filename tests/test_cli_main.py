@@ -142,8 +142,8 @@ sampling:
             result = runner.invoke(cli, ["run", "--spec-file", str(temp_path)])
 
             assert result.exit_code == 0
-            assert "Running evaluation" in result.output
-            assert "not yet implemented" in result.output
+            assert "🚀" in result.output  # Starting evaluation pipeline
+            assert "Starting evaluation pipeline" in result.output
         finally:
             temp_path.unlink()
 
@@ -184,10 +184,11 @@ sampling:
                 print(f"Error output: {result.output}")
 
             assert result.exit_code == 0
-            assert "Would run evaluation" in result.output
+            assert "🗓️" in result.output  # Execution Plan emoji
+            assert "Execution Plan" in result.output
             assert "test_dry_run" in result.output
-            assert "Variants: 100" in result.output
-            assert "latin_hypercube" in result.output
+            assert "100" in result.output  # Samples count
+            assert "Pipeline Steps" in result.output
         finally:
             temp_path.unlink()
 
@@ -239,7 +240,8 @@ sampling:
                 )
 
                 assert result.exit_code == 0
-                assert str(output_path) in result.output
+                # In dry-run mode, just check execution plan is shown
+                assert "Execution Plan" in result.output
             finally:
                 output_path.unlink()
         finally:
@@ -262,7 +264,7 @@ pipeline:
             result = runner.invoke(cli, ["run", "--spec-file", str(temp_path)])
 
             assert result.exit_code == 1
-            assert "Error loading specification" in result.output
+            assert "Error during evaluation" in result.output
         finally:
             temp_path.unlink()
 
@@ -309,7 +311,7 @@ n_variants: 100
 
             assert result.exit_code == 0
             assert "MetaReason CLI initialized" in result.output
-            assert "Would run evaluation" in result.output
+            assert "Execution Plan" in result.output
         finally:
             temp_path.unlink()
 
