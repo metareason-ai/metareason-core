@@ -228,3 +228,4 @@ config/local.yaml
 
 .claude/
 .scratch/
+.specs/
