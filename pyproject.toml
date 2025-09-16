@@ -40,6 +40,7 @@ dependencies = [
     "pandas>=2.0,<3.0",  # Data manipulation
     "tqdm>=4.66,<5.0",  # Progress bars
     "aiohttp>=3.9,<4.0",  # Async HTTP server/client
+    "ollama>=0.5,<1.0",  # Ollama API client
     "openai>=1.0,<2.0",  # Official OpenAI API client
     "anthropic>=0.34,<1.0",  # Official Anthropic API client
     "google-genai>=1.0,<2.0",  # Official Google GenAI SDK for Gemini
@@ -74,7 +75,7 @@ docs = [
 ]
 
 [project.scripts]
-metareason = "metareason.cli.main:cli"
+metareason = "metareason.cli.main:metareason"
 
 [project.urls]
 Homepage = "https://github.com/jeffgbradley2/metareason-ai"
