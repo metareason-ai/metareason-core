@@ -1,4 +1,3 @@
-import itertools
 import logging
 from typing import Any, Dict, List
 
@@ -130,53 +129,18 @@ class LhsSampler:
         else:
             raise ValueError(f"Unkown distribution: {distribution}")
 
-    def _generate_categorical_samples(self, n_samples: int) -> List[List[str]]:
+    def _generate_categorical_samples(self, n_samples: int) -> np.ndarray:
         if not self.categorical_axes:
             return [[] for _ in range(n_samples)]
 
-        categorical_samples = []
+        all_columns = []
 
-        for _ in range(n_samples):
-            sample = []
-            for axis in self.categorical_axes:
-                values = axis.values
-                weights = axis.weights
+        for axis in self.categorical_axes:
+            values_list = list(axis.values)
+            base_count = n_samples // len(values_list)
+            remainder = n_samples % len(values_list)
+            categorical_samples = values_list * base_count + values_list[:remainder]
+            np.random.shuffle(categorical_samples)
+            all_columns.append(categorical_samples)
 
-                if weights:
-                    choice = self.rng.choice(values, p=weights)
-                else:
-                    choice = self.rng.choice(values)
-
-                sample.append(choice)
-
-            categorical_samples.append(sample)
-
-        return categorical_samples
-
-    def implement_categorical_stratification(self, n_samples: int) -> List[List[str]]:
-        if not self.categorical_axes:
-            return [[] for _ in range(n_samples)]
-
-        all_combinations = list(
-            itertools.product(*[axis.values for axis in self.categorical_axes])
-        )
-        n_combinations = len(all_combinations)
-
-        base_samples_per_combo = n_samples // n_combinations
-        extra_samples = n_samples % n_combinations
-        categorical_samples = []
-        combo_index = 0
-
-        for combo in all_combinations:
-            samples_for_combo = base_samples_per_combo
-            if combo_index < extra_samples:
-                samples_for_combo += 1
-
-            for _ in range(samples_for_combo):
-                categorical_samples.append(list(combo))
-
-            combo_index += 1
-
-        self.rng.shuffle(categorical_samples)
-
-        return categorical_samples[:n_samples]
+        return np.column_stack(all_columns)
