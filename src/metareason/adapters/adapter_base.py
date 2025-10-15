@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -11,7 +12,7 @@ class AdapterException(Exception):
 
 class AdapterRequest(BaseModel):
     model: str
-    system_prompt: str = None
+    system_prompt: Optional[str] = None
     user_prompt: str
     temperature: float = Field(ge=0.0, le=2.0)
     top_p: float = Field(gt=0.0, le=1.0)

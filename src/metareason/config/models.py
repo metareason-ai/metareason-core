@@ -8,7 +8,7 @@ class AxisConfig(BaseModel):
     type: Literal["categorical", "continuous"]
     values: List[Any] = None
     weights: List[float] = None
-    distribution: str = None
+    distribution: Optional[Literal["uniform", "normal", "truncnorm", "beta"]] = None
     params: Dict[str, float] = {}
 
 

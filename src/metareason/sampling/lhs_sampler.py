@@ -7,7 +7,7 @@ from scipy.stats import beta, norm, qmc, truncnorm
 
 from ..config import AxisConfig
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class LhsSampler:
@@ -53,7 +53,7 @@ class LhsSampler:
             return np.empty((n_samples, 0))
 
         n_dims = len(self.continuous_axes)
-        lhs_sampler = qmc.LatinHypercube(d=n_dims, seed=self.rng.bit_generator)
+        lhs_sampler = qmc.LatinHypercube(d=n_dims, seed=self.rng)
         lhs_samples = lhs_sampler.random(n_samples)
 
         if optimize:
@@ -131,7 +131,7 @@ class LhsSampler:
 
     def _generate_categorical_samples(self, n_samples: int) -> np.ndarray:
         if not self.categorical_axes:
-            return [[] for _ in range(n_samples)]
+            return np.empty((n_samples, 0), dtype=object)
 
         all_columns = []
 
@@ -140,7 +140,7 @@ class LhsSampler:
             base_count = n_samples // len(values_list)
             remainder = n_samples % len(values_list)
             categorical_samples = values_list * base_count + values_list[:remainder]
-            np.random.shuffle(categorical_samples)
+            self.rng.shuffle(categorical_samples)
             all_columns.append(categorical_samples)
 
         return np.column_stack(all_columns)
