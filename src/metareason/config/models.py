@@ -6,8 +6,8 @@ from pydantic import BaseModel, Field
 class AxisConfig(BaseModel):
     name: str
     type: Literal["categorical", "continuous"]
-    values: List[Any] = None
-    weights: List[float] = None
+    values: List[Any] = []
+    weights: List[float] = []
     distribution: Optional[Literal["uniform", "normal", "truncnorm", "beta"]] = None
     params: Dict[str, float] = {}
 
