@@ -31,7 +31,8 @@ class OracleConfig(BaseModel):
     type: Literal["llm_judge"]
     model: str
     adapter: str
-    max_tokens: int = 1000
+    max_tokens: int = 2000
+    temperature: Optional[int] = 1
     rubric: Optional[str] = None
 
 
