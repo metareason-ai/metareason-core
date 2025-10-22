@@ -73,6 +73,19 @@ oracles:
 
       Provide your rating as a JSON object: {"score": X, "explanation": "..."}
 
+# Bayesian Analysis Configuration (optional)
+# Controls PyMC Bayesian modeling and MCMC sampling for posterior inference
+analysis:
+  # MCMC sampling parameters
+  mcmc_draws: 2000      # Number of posterior samples per chain
+  mcmc_tune: 1000       # Number of tuning/warmup samples (discarded)
+  mcmc_chains: 4        # Number of independent MCMC chains
+
+  # Prior parameters for calibration model
+  prior_quality_mu: 3.0      # Prior mean for true quality (1-5 scale)
+  prior_quality_sigma: 1.0   # Prior std for true quality
+  prior_noise_sigma: 0.5     # Prior std for oracle measurement error
+
 # Axes Configuration
 # Defines the parameter space to explore
 axes:
