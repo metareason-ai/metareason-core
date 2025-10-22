@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-This is a fresh start for MetaReason Core, an open-source tool for quantitative measurement of LLM and agentic AI systems. The previous implementation has been removed and the project is being rebuilt from scratch.
+MetaReason Core is in active development with core features implemented and working. The project provides a quantitative framework for measuring LLM and agentic AI systems using Latin Hypercube Sampling and LLM-based evaluation judges.
 
 ## Project Vision
 
@@ -53,11 +53,41 @@ bandit -r src
 
 ## Project Structure
 
-Currently, the project is essentially empty:
-- `src/metareason/` - Main package directory (currently only __init__.py)
-- `tests/` - Test directory (currently empty)
+The project has the following structure:
+
+- `src/metareason/` - Main package directory
+  - `config/` - Pydantic models for YAML specification validation
+  - `adapters/` - LLM adapter implementations (currently: Ollama)
+  - `oracles/` - Evaluation oracles (currently: LLM Judge)
+  - `sampling/` - Sampling strategies (currently: Latin Hypercube)
+  - `pipeline/` - Template rendering and execution pipeline
+  - `cli/` - Click-based command-line interface
+- `tests/` - Test directory (currently: LHS sampler tests with 11 test cases)
+- `test_suite/` - Example specifications for testing
 - `scripts/` - Development scripts for formatting and testing
 - `pyproject.toml` - Project configuration with dependencies
+
+## Implementation Status
+
+### ✅ Completed Features
+- YAML-based specification system with Pydantic validation
+- Jinja2 template rendering for prompts
+- Latin Hypercube Sampling with multiple distributions (uniform, normal, truncnorm, beta)
+- LLM Judge oracle for evaluations
+- Async pipeline execution with multi-stage support
+- CLI commands: `metareason run` and `metareason validate`
+- Ollama adapter for local models
+
+### 🚧 In Progress
+- Bayesian analysis with PyMC (dependency installed, not yet implemented)
+- Report generation (currently JSON only, HTML/PDF planned)
+- Additional adapters (OpenAI, Anthropic, Google GenAI)
+- Comprehensive test coverage (currently ~20%, target 80%)
+
+### 📋 Planned
+- Additional oracle types (regex, keyword, statistical)
+- Additional sampling methods beyond LHS
+- Visualization and statistical reporting
 
 ## Claude's Role
 

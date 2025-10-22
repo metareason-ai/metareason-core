@@ -1,17 +1,71 @@
 # MetaReason Core
 
-MetaReason Core is indended to be an open source tool for quantiative measurement of LLM and agentic AI systems.
+MetaReason Core is an open source tool for quantitative measurement of LLM and agentic AI systems.
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/jeffgbradley2/metareason-ai/metareason-core.git
+cd metareason-core
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install in development mode
+pip install -e ".[dev]"
+```
+
+### Basic Usage
+
+1. **Validate a specification file**:
+```bash
+metareason validate examples/quantum_entanglement_eval.yml
+```
+
+2. **Run an evaluation**:
+```bash
+metareason run examples/quantum_entanglement_eval.yml
+```
+
+This will:
+- Generate parameter samples using Latin Hypercube Sampling
+- Execute the LLM pipeline with each sample
+- Evaluate outputs using configured oracles
+- Save results to `reports/` directory
+
+3. **View results**:
+Results are saved as JSON in the `reports/` directory with timestamps.
+
+### Example Specification
+
+See [examples/quantum_entanglement_eval.yml](examples/quantum_entanglement_eval.yml) for a complete example demonstrating:
+- Multiple sampling distributions (categorical, uniform, normal, truncnorm, beta)
+- Jinja2 template rendering with parameter interpolation
+- Dual oracle evaluation (coherence + accuracy judges)
+- Latin Hypercube Sampling with 10 variants
 
 ## The Vision
 
-- Yaml based specifications
-- Jinja templating
-- Latin Hypercube Sampling (and others)
-- LLM Judges (and others)
-- Bayesian Analysis
-- Pipeline of steps
-- CLI
-- Report generation
+### ✅ Implemented
+- ✅ YAML-based specifications with Pydantic validation
+- ✅ Jinja2 templating for prompt generation
+- ✅ Latin Hypercube Sampling for parameter space exploration
+- ✅ LLM Judge oracles for evaluation
+- ✅ Pipeline-based execution model (multi-stage, async)
+- ✅ CLI interface (`run`, `validate` commands)
+
+### 🚧 Coming Soon
+- 🚧 Bayesian analysis for statistical rigor (PyMC integration)
+- 🚧 Rich HTML/PDF report generation with visualizations
+- 🚧 Additional LLM adapters (OpenAI, Anthropic, Google)
+- 🚧 Additional oracle types (regex, statistical, custom)
+- 🚧 Additional sampling methods
+
+## 🛠️ Development
 
 ### Code Quality
 
@@ -20,9 +74,8 @@ The project uses several tools to maintain code quality:
 - **Black**: Code formatting
 - **isort**: Import sorting
 - **flake8**: Linting
-- **mypy**: Type checking
 - **bandit**: Security checks
-- **pre-commit**: Automated checks before commits
+- **pytest**: Testing framework
 
 Run all checks manually:
 ```bash
@@ -35,11 +88,11 @@ isort src tests
 # Run linting
 flake8 src tests
 
-# Type checking
-mypy src
-
 # Security checks
 bandit -r src
+
+# Run tests
+pytest
 ```
 
 ## 🤝 Contributing
