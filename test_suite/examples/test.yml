@@ -86,6 +86,9 @@ analysis:
   prior_quality_sigma: 1.0   # Prior std for true quality
   prior_noise_sigma: 0.5     # Prior std for oracle measurement error
 
+  # High-Density Interval (HDI) configuration
+  hdi_probability: 0.94      # Credible interval probability (0.89, 0.94, 0.95 common)
+
 # Axes Configuration
 # Defines the parameter space to explore
 axes:

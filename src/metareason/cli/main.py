@@ -7,6 +7,13 @@ import arviz as az
 import click
 import yaml
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
 from rich.syntax import Syntax
 from rich.table import Table
 
@@ -16,6 +23,42 @@ from ..pipeline import load_spec, runner
 from ..pipeline.runner import SampleResult
 
 console = Console()
+
+
+def display_population_quality(result: dict, oracle_name: str):
+    """Display population-level quality estimate with HDI.
+
+    Args:
+        result: Dictionary from BayesianAnalyzer.estimate_population_quality()
+        oracle_name: Name of the oracle being analyzed
+    """
+    hdi_prob_pct = int(result["hdi_prob"] * 100)
+
+    console.print(f"\n[bold magenta]Population Quality: {oracle_name}[/bold magenta]\n")
+
+    # Main finding - the HDI statement
+    console.print(
+        f"[bold green]We are {hdi_prob_pct}% confident the true {oracle_name} quality "
+        f"is between {result['hdi_lower']:.2f} and {result['hdi_upper']:.2f}[/bold green]\n"
+    )
+
+    # Additional statistics
+    console.print("[cyan]Population Statistics:[/cyan]")
+    console.print(f"  Mean: {result['population_mean']:.3f}")
+    console.print(f"  Median: {result['population_median']:.3f}")
+    console.print(
+        f"  {hdi_prob_pct}% HDI: [{result['hdi_lower']:.3f}, {result['hdi_upper']:.3f}]"
+    )
+
+    # Oracle noise estimate
+    noise_hdi_lower, noise_hdi_upper = result["oracle_noise_hdi"]
+    console.print(
+        f"\n[cyan]Oracle Variability:[/cyan] "
+        f"{result['oracle_noise_mean']:.3f} "
+        f"({hdi_prob_pct}% HDI: [{noise_hdi_lower:.3f}, {noise_hdi_upper:.3f}])"
+    )
+
+    console.print(f"[dim]Based on {result['n_samples']} evaluations[/dim]")
 
 
 def display_bayesian_analysis(idata: az.InferenceData, oracle_name: str, results: list):
@@ -95,15 +138,29 @@ def run(spec, output, analyze):
     """Run an evaluation based on a specification file."""
     try:
         spec_path = Path(spec)
-        console.print(
-            f"[bold blue]Running evaluation with spec:[/bold blue] {spec_path}"
-        )
 
         # Load spec to check for analysis config
         spec_config = load_spec(spec_path)
 
-        # Run evaluation
-        responses = asyncio.run(runner.run(spec_path))
+        console.print(
+            f"[bold blue]Running evaluation with spec:[/bold blue] {spec_path}"
+        )
+        console.print(f"[dim]Generating {spec_config.n_variants} variant(s)...[/dim]\n")
+
+        # Run evaluation with progress indicator
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(
+                f"[cyan]Evaluating {spec_config.n_variants} variants with {len(spec_config.oracles)} oracle(s)...",
+                total=None,
+            )
+            responses = asyncio.run(runner.run(spec_path))
+            progress.update(task, completed=True)
 
         console.print(
             f"\n[bold green]✓ Completed {len(responses)} evaluations[/bold green]\n"
@@ -150,45 +207,109 @@ def run(spec, output, analyze):
             console.print("\n[bold blue]Running Bayesian Analysis...[/bold blue]\n")
 
             analyzer = BayesianAnalyzer(responses, spec_config)
+            oracle_names = list(spec_config.oracles.keys())
 
-            # Analyze each oracle
+            # Analyze each oracle with progress tracking
             analysis_results = {}
-            for oracle_name in spec_config.oracles.keys():
-                try:
-                    console.print(
-                        f"[cyan]Analyzing oracle:[/cyan] {oracle_name} (MCMC sampling...)"
-                    )
-                    idata = analyzer.fit_calibration_model(oracle_name)
-                    analysis_results[oracle_name] = idata
 
-                    # Display results
-                    display_bayesian_analysis(idata, oracle_name, responses)
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                analysis_task = progress.add_task(
+                    f"[cyan]Bayesian analysis: 0/{len(oracle_names)} oracles completed",
+                    total=len(oracle_names),
+                )
 
-                except Exception as e:
-                    console.print(
-                        f"[yellow]⚠️  Analysis failed for {oracle_name}: {e}[/yellow]"
-                    )
+                for idx, oracle_name in enumerate(oracle_names, 1):
+                    try:
+                        progress.update(
+                            analysis_task,
+                            description=f"[cyan]Analyzing {oracle_name} (MCMC sampling...)",
+                        )
+
+                        # Estimate population-level quality with HDI
+                        hdi_prob = (
+                            spec_config.analysis.hdi_probability
+                            if spec_config.analysis
+                            else 0.94
+                        )
+                        pop_result = analyzer.estimate_population_quality(
+                            oracle_name, hdi_prob=hdi_prob
+                        )
+                        analysis_results[oracle_name] = pop_result
+
+                        progress.update(
+                            analysis_task,
+                            advance=1,
+                            description=f"[cyan]Bayesian analysis: {idx}/{len(oracle_names)} oracles completed",
+                        )
+
+                    except Exception as e:
+                        progress.update(analysis_task, advance=1)
+                        console.print(
+                            f"[yellow]⚠️  Analysis failed for {oracle_name}: {e}[/yellow]"
+                        )
+
+            # Display results after progress bar completes
+            console.print()
+            for oracle_name, pop_result in analysis_results.items():
+                display_population_quality(pop_result, oracle_name)
 
         elif analyze and not spec_config.analysis:
             console.print(
                 "[yellow]⚠️  --analyze flag set but no 'analysis' config in spec. "
                 "Using defaults.[/yellow]\n"
             )
-            # Could still run with defaults, but let's warn the user
+            # Run with defaults
             analyzer = BayesianAnalyzer(responses, spec_config)
+            oracle_names = list(spec_config.oracles.keys())
             analysis_results = {}
-            for oracle_name in spec_config.oracles.keys():
-                try:
-                    console.print(
-                        f"[cyan]Analyzing oracle:[/cyan] {oracle_name} (MCMC sampling...)"
-                    )
-                    idata = analyzer.fit_calibration_model(oracle_name)
-                    analysis_results[oracle_name] = idata
-                    display_bayesian_analysis(idata, oracle_name, responses)
-                except Exception as e:
-                    console.print(
-                        f"[yellow]⚠️  Analysis failed for {oracle_name}: {e}[/yellow]"
-                    )
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                console=console,
+            ) as progress:
+                analysis_task = progress.add_task(
+                    f"[cyan]Bayesian analysis: 0/{len(oracle_names)} oracles completed",
+                    total=len(oracle_names),
+                )
+
+                for idx, oracle_name in enumerate(oracle_names, 1):
+                    try:
+                        progress.update(
+                            analysis_task,
+                            description=f"[cyan]Analyzing {oracle_name} (MCMC sampling...)",
+                        )
+
+                        # Estimate population-level quality with HDI
+                        pop_result = analyzer.estimate_population_quality(
+                            oracle_name, hdi_prob=0.94
+                        )
+                        analysis_results[oracle_name] = pop_result
+
+                        progress.update(
+                            analysis_task,
+                            advance=1,
+                            description=f"[cyan]Bayesian analysis: {idx}/{len(oracle_names)} oracles completed",
+                        )
+
+                    except Exception as e:
+                        progress.update(analysis_task, advance=1)
+                        console.print(
+                            f"[yellow]⚠️  Analysis failed for {oracle_name}: {e}[/yellow]"
+                        )
+
+            # Display results after progress bar completes
+            console.print()
+            for oracle_name, pop_result in analysis_results.items():
+                display_population_quality(pop_result, oracle_name)
 
         # Save results to JSON file
         if output:
@@ -216,14 +337,15 @@ def run(spec, output, analyze):
 
         # Save analysis results if they exist
         if analyze and "analysis_results" in locals():
-            for oracle_name, idata in analysis_results.items():
-                # Save as NetCDF (ArviZ InferenceData format)
+            for oracle_name, pop_result in analysis_results.items():
+                # Save population quality results as JSON
                 analysis_path = output_path.with_suffix("").with_suffix(
-                    f".{oracle_name}_analysis.nc"
+                    f".{oracle_name}_population_quality.json"
                 )
-                idata.to_netcdf(analysis_path)
+                with open(analysis_path, "w") as f:
+                    json.dump(pop_result, f, indent=2)
                 console.print(
-                    f"[green]✓ Analysis for {oracle_name} saved to {analysis_path}[/green]"
+                    f"[green]✓ Population quality analysis for {oracle_name} saved to {analysis_path}[/green]"
                 )
 
     except Exception as e:
@@ -308,35 +430,70 @@ def analyze(results_json, spec, oracle):
         console.print("[bold blue]Running Bayesian Analysis...[/bold blue]\n")
         analysis_results = {}
 
-        for oracle_name in oracle_names:
-            try:
-                console.print(
-                    f"[cyan]Analyzing oracle:[/cyan] {oracle_name} (MCMC sampling...)"
-                )
-                idata = analyzer.fit_calibration_model(oracle_name)
-                analysis_results[oracle_name] = idata
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            analysis_task = progress.add_task(
+                f"[cyan]Bayesian analysis: 0/{len(oracle_names)} oracles completed",
+                total=len(oracle_names),
+            )
 
-                # Display results
-                display_bayesian_analysis(idata, oracle_name, results)
+            for idx, oracle_name in enumerate(oracle_names, 1):
+                try:
+                    progress.update(
+                        analysis_task,
+                        description=f"[cyan]Analyzing {oracle_name} (MCMC sampling...)",
+                    )
 
-            except KeyError:
-                console.print(
-                    f"[yellow]⚠️  Oracle '{oracle_name}' not found in results[/yellow]"
-                )
-            except Exception as e:
-                console.print(f"[red]✗ Analysis failed for {oracle_name}: {e}[/red]")
+                    # Estimate population-level quality with HDI
+                    hdi_prob = (
+                        spec_config.analysis.hdi_probability
+                        if spec_config.analysis
+                        else 0.94
+                    )
+                    pop_result = analyzer.estimate_population_quality(
+                        oracle_name, hdi_prob=hdi_prob
+                    )
+                    analysis_results[oracle_name] = pop_result
+
+                    progress.update(
+                        analysis_task,
+                        advance=1,
+                        description=f"[cyan]Bayesian analysis: {idx}/{len(oracle_names)} oracles completed",
+                    )
+
+                except KeyError:
+                    progress.update(analysis_task, advance=1)
+                    console.print(
+                        f"[yellow]⚠️  Oracle '{oracle_name}' not found in results[/yellow]"
+                    )
+                except Exception as e:
+                    progress.update(analysis_task, advance=1)
+                    console.print(
+                        f"[red]✗ Analysis failed for {oracle_name}: {e}[/red]"
+                    )
+
+        # Display results after progress bar completes
+        console.print()
+        for oracle_name, pop_result in analysis_results.items():
+            display_population_quality(pop_result, oracle_name)
 
         # Save analysis results
         if analysis_results:
             console.print("\n[bold blue]Saving Analysis Results...[/bold blue]")
-            for oracle_name, idata in analysis_results.items():
-                # Save in same directory as results JSON
+            for oracle_name, pop_result in analysis_results.items():
+                # Save population quality results as JSON
                 analysis_path = results_path.with_suffix("").with_suffix(
-                    f".{oracle_name}_analysis.nc"
+                    f".{oracle_name}_population_quality.json"
                 )
-                idata.to_netcdf(analysis_path)
+                with open(analysis_path, "w") as f:
+                    json.dump(pop_result, f, indent=2)
                 console.print(
-                    f"[green]✓ Analysis for {oracle_name} saved to {analysis_path}[/green]"
+                    f"[green]✓ Population quality analysis for {oracle_name} saved to {analysis_path}[/green]"
                 )
 
     except FileNotFoundError as e:

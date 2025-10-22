@@ -162,6 +162,9 @@ class BayesianAnalysisConfig(BaseModel):
             Controls how much we allow quality to vary from the mean a priori.
         prior_noise_sigma: Prior standard deviation for oracle noise (default: 0.5).
             Represents our belief about oracle measurement error.
+        hdi_probability: Probability mass for credible intervals (default: 0.94).
+            Common values: 0.89, 0.94, 0.95. This determines the width of
+            the credible interval in statements like "94% confident quality is between X and Y".
     """
 
     # MCMC sampling parameters
@@ -173,6 +176,9 @@ class BayesianAnalysisConfig(BaseModel):
     prior_quality_mu: float = Field(default=3.0, ge=0.0, le=5.0)
     prior_quality_sigma: float = Field(default=1.0, gt=0.0)
     prior_noise_sigma: float = Field(default=0.5, gt=0.0)
+
+    # High-Density Interval (HDI) configuration
+    hdi_probability: float = Field(default=0.94, gt=0.0, lt=1.0)
 
 
 class SpecConfig(BaseModel):

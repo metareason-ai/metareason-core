@@ -32,7 +32,7 @@ sampling:
   random_seed: 42
 
 # Number of variants to generate
-n_variants: 10
+n_variants: 100
 
 # Oracle Configuration
 # LLM judges that evaluate the outputs
