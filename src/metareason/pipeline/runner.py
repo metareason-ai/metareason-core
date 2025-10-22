@@ -7,8 +7,7 @@ from pydantic import BaseModel
 
 from ..adapters import AdapterRequest, OllamaAdapter
 from ..config import SpecConfig
-from ..oracles import EvaluationContext, EvaluationResult
-from ..oracles.llm_judge import LLMJudge
+from ..oracles import EvaluationContext, EvaluationResult, LLMJudge
 from ..sampling import LhsSampler
 from . import TemplateRenderer, load_spec
 
