@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -70,15 +71,31 @@ def run(spec, output):
                     console.print(f"    → {explanation_preview}")
             console.print()
 
-        # Save to file if requested
-        if output:
-            import json
+        # Save results to JSON file
+        import json
 
+        if output:
+            # User specified output path
             output_path = Path(output)
-            results_data = [r.model_dump() for r in responses]
-            with open(output_path, "w") as f:
-                json.dump(results_data, f, indent=2)
-            console.print(f"[green]Results saved to {output_path}[/green]")
+        else:
+            # Default: save to reports directory with timestamp
+            reports_dir = Path("reports")
+            reports_dir.mkdir(exist_ok=True)
+
+            # Generate timestamp-based filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            spec_name = Path(spec).stem
+            output_path = reports_dir / f"{spec_name}_{timestamp}.json"
+
+        # Ensure parent directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Save results
+        results_data = [r.model_dump() for r in responses]
+        with open(output_path, "w") as f:
+            json.dump(results_data, f, indent=2)
+
+        console.print(f"\n[green]✓ Results saved to {output_path}[/green]")
 
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
