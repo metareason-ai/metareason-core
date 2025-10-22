@@ -1,0 +1,117 @@
+# MetaReason Test Specification
+# This file demonstrates all configuration options from models.py
+
+spec_id: "test_evaluation_001"
+
+# Pipeline Configuration
+# Defines the LLM pipeline(s) to evaluate using Ollama with local model
+pipeline:
+  - template: |
+      You are a helpful assistant. Please respond to the following query with the specified characteristics.
+
+      Tone: {{ tone }}
+      Complexity Level: {{ complexity_level }}
+      Detail Level: {{ detail_level }}
+      Formality Score: {{ formality_score }}
+      Creativity Factor: {{ creativity_factor }}
+
+      Query: Explain the concept of quantum entanglement.
+
+      Please provide a response that matches the specified tone and parameters above.
+    adapter: "ollama"
+    model: "gpt-oss:20b"
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 1000
+
+# Sampling Configuration
+# Uses Latin Hypercube Sampling with maximin optimization
+sampling:
+  method: "latin_hypercube"
+  optimization: "maximin"
+  random_seed: 42
+
+# Number of variants to generate
+n_variants: 10
+
+# Oracle Configuration
+# LLM judges that evaluate the outputs
+oracles:
+  coherence_judge:
+    type: "llm_judge"
+    model: "gpt-oss:20b"
+    adapter: "ollama"
+    max_tokens: 2000
+    temperature: 1
+    rubric: |
+      Evaluate the response for coherence and logical flow.
+
+      Rate on a scale of 1-5:
+      - 1: Incoherent, contradictory, or nonsensical
+      - 2: Somewhat coherent but with significant gaps
+      - 3: Moderately coherent with some issues
+      - 4: Generally coherent with minor issues
+      - 5: Highly coherent and logically sound
+
+      Provide your rating as a JSON object: {"score": X, "explanation": "..."}
+
+  accuracy_judge:
+    type: "llm_judge"
+    model: "gpt-oss:20b"
+    adapter: "ollama"
+    max_tokens: 2000
+    temperature: 1
+    rubric: |
+      Evaluate the factual accuracy of the response.
+
+      Rate on a scale of 1-5:
+      - 1: Contains significant factual errors
+      - 2: Mostly accurate but with some mistakes
+      - 3: Moderately accurate with minor issues
+      - 4: Accurate with very minor inaccuracies
+      - 5: Completely accurate and factually sound
+
+      Provide your rating as a JSON object: {"score": X, "explanation": "..."}
+
+# Axes Configuration
+# Defines the parameter space to explore
+axes:
+  # Categorical axis example
+  - name: "tone"
+    type: "categorical"
+    values: ["formal", "casual", "technical", "friendly"]
+    weights: [0.25, 0.25, 0.25, 0.25]
+
+  # Continuous axis with uniform distribution
+  - name: "complexity_level"
+    type: "continuous"
+    distribution: "uniform"
+    params:
+      low: 1.0
+      high: 10.0
+
+  # Continuous axis with normal distribution
+  - name: "detail_level"
+    type: "continuous"
+    distribution: "normal"
+    params:
+      mu: 5.0
+      sigma: 1.5
+
+  # Continuous axis with truncated normal distribution
+  - name: "formality_score"
+    type: "continuous"
+    distribution: "truncnorm"
+    params:
+      mu: 5.0
+      sigma: 2.0
+      low: 0.0
+      high: 10.0
+
+  # Continuous axis with beta distribution
+  - name: "creativity_factor"
+    type: "continuous"
+    distribution: "beta"
+    params:
+      alpha: 2.0
+      beta: 5.0

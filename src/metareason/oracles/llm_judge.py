@@ -18,7 +18,12 @@ from metareason.adapters.adapter_base import AdapterResponse
 
 from ..adapters import AdapterRequest, OllamaAdapter
 from ..config import OracleConfig
-from . import EvaluationContext, EvaluationResult, OracleBase, OracleException
+from .oracle_base import (
+    EvaluationContext,
+    EvaluationResult,
+    OracleBase,
+    OracleException,
+)
 
 
 class LLMJudge(OracleBase):
@@ -74,10 +79,10 @@ class LLMJudge(OracleBase):
             Respond with a JSON object that contains the score and an explanation.
 
             Example Response:
-            {
+            {{
                 "score": 5,
                 "explanation": "The response is perfect and meets all criteria."
-            }
+            }}
 
             Rubric:
             {self.config.rubric}
@@ -123,6 +128,7 @@ class LLMJudge(OracleBase):
                 system_prompt=self.sys_prompt,
                 user_prompt=user_prompt,
                 temperature=self.config.temperature,
+                top_p=1.0,  # Use default value for judge oracle
                 max_tokens=self.config.max_tokens,
             )
 
@@ -139,7 +145,7 @@ class LLMJudge(OracleBase):
                 raise OracleException("Judge response missing 'score' field")
 
             return EvaluationResult(
-                score=float(response["score"]) / 5.0,
+                score=float(response["score"]),
                 explanation=response.get("explanation", "No explanation provided"),
             )
 

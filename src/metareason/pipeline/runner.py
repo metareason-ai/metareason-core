@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from ..adapters import AdapterRequest, OllamaAdapter
 from ..config import SpecConfig
 from ..oracles import EvaluationContext, EvaluationResult
-from ..oracles.llm_judge import LlmJudge
+from ..oracles.llm_judge import LLMJudge
 from ..sampling import LhsSampler
 from . import TemplateRenderer, load_spec
 
@@ -50,7 +50,7 @@ async def run(spec_path: Path) -> List[SampleResult]:
     oracles = {}
     for oracle_name, oracle_config in spec_config.oracles.items():
         if oracle_config.type == "llm_judge":
-            oracles[oracle_name] = LlmJudge(oracle_config)
+            oracles[oracle_name] = LLMJudge(oracle_config)
         else:
             logger.warning(f"Unknown oracle type: {oracle_config.type}")
 
