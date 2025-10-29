@@ -63,7 +63,6 @@ class BayesianAnalyzer:
         scores = np.array([r.evaluations[oracle_name].score for r in self.results])
 
         with pm.Model() as model:
-            # Prior: True quality for each variant
             true_quality = pm.Normal(
                 "true_quality",
                 mu=self.analysis_config.prior_quality_mu,
@@ -71,17 +70,14 @@ class BayesianAnalyzer:
                 shape=self.n_variants,
             )
 
-            # Prior: Oracle measurement noise
             oracle_noise = pm.HalfNormal(
                 "oracle_noise", sigma=self.analysis_config.prior_noise_sigma
             )
 
-            # Likelihood: Observed scores = true quality + noise
             observed = pm.Normal(
                 "observed", mu=true_quality, sigma=oracle_noise, observed=scores
             )
 
-            # Sample posterior using MCMC (NUTS sampler)
             trace = pm.sample(
                 draws=self.analysis_config.mcmc_draws,
                 tune=self.analysis_config.mcmc_tune,

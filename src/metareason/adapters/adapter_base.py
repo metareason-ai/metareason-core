@@ -24,11 +24,11 @@ class AdapterResponse(BaseModel):
 
 
 class AdapterBase(ABC):
-    def __init__(self):
-        self._init()
+    def __init__(self, **kwargs):
+        self._init(**kwargs)
 
     @abstractmethod
-    def _init(self): ...
+    def _init(self, **kwargs): ...
 
     @abstractmethod
     def send_request(self, request: AdapterRequest) -> AdapterResponse: ...

@@ -3,6 +3,44 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
+class AdapterConfig(BaseModel):
+    """Configuration for an LLM adapter.
+
+    Specifies which adapter to use and optional adapter-specific parameters.
+    Parameters are passed directly to the adapter constructor as kwargs.
+
+    Attributes:
+        name: Name of the adapter to use ('ollama', 'google', etc.).
+        params: Optional dictionary of adapter-specific parameters.
+            For Google: api_key, project_id, location, vertex_ai
+            For Ollama: Currently uses default settings
+            If not provided, adapters will use environment variables.
+
+    Examples:
+        Simple adapter (uses env vars):
+            AdapterConfig(name="ollama")
+
+        Google with API key:
+            AdapterConfig(
+                name="google",
+                params={"api_key": "sk-..."}
+            )
+
+        Google Vertex AI:
+            AdapterConfig(
+                name="google",
+                params={
+                    "vertex_ai": true,
+                    "project_id": "my-project",
+                    "location": "us-central1"
+                }
+            )
+    """
+
+    name: Literal["ollama", "google"]
+    params: Dict[str, Any] = Field(default_factory=dict)
+
+
 class AxisConfig(BaseModel):
     """Configuration for a parameter axis in the sampling space.
 
@@ -55,7 +93,7 @@ class PipelineConfig(BaseModel):
     Attributes:
         template: Jinja2 template string for the prompt. Can reference axis parameters
             using {{ parameter_name }} syntax.
-        adapter: Name of the LLM adapter to use (e.g., "ollama", "openai").
+        adapter: Adapter configuration specifying which adapter to use and its parameters.
         model: Model identifier for the adapter (e.g., "gpt-4", "llama2").
         temperature: Sampling temperature for generation. Range: [0.0, 2.0].
             Lower values = more deterministic, higher values = more random.
@@ -66,7 +104,7 @@ class PipelineConfig(BaseModel):
     Example:
         PipelineConfig(
             template="Explain {{ topic }} in a {{ tone }} tone.",
-            adapter="ollama",
+            adapter=AdapterConfig(name="ollama"),
             model="llama2",
             temperature=0.7,
             top_p=0.9,
@@ -75,7 +113,7 @@ class PipelineConfig(BaseModel):
     """
 
     template: str
-    adapter: str
+    adapter: AdapterConfig
     model: str
     temperature: float = Field(ge=0.0, le=2.0)
     top_p: float = Field(gt=0.0, le=1)
@@ -116,7 +154,7 @@ class OracleConfig(BaseModel):
     Attributes:
         type: Type of oracle. Currently only "llm_judge" is supported.
         model: Model identifier for the judge LLM (e.g., "gpt-4", "llama2").
-        adapter: Name of the LLM adapter to use for the judge.
+        adapter: Adapter configuration specifying which adapter to use and its parameters.
         max_tokens: Maximum tokens for the judge's evaluation response (default: 2000).
         temperature: Sampling temperature for the judge LLM (default: 1).
         rubric: Evaluation rubric or criteria for the judge. Should instruct the judge
@@ -126,7 +164,7 @@ class OracleConfig(BaseModel):
         OracleConfig(
             type="llm_judge",
             model="gpt-4",
-            adapter="openai",
+            adapter=AdapterConfig(name="google", params={"api_key": "xxx"}),
             rubric='''
                 Evaluate coherence on a 1-5 scale:
                 1 = Incoherent, 5 = Perfectly coherent
@@ -137,7 +175,7 @@ class OracleConfig(BaseModel):
 
     type: Literal["llm_judge"]
     model: str
-    adapter: str
+    adapter: AdapterConfig
     max_tokens: int = 2000
     temperature: Optional[int] = 1
     rubric: Optional[str] = None

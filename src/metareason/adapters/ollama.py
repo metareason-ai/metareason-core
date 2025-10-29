@@ -2,7 +2,7 @@ import logging
 
 from ollama import AsyncClient, ChatResponse
 
-from . import AdapterBase, AdapterException, AdapterRequest, AdapterResponse
+from .adapter_base import AdapterBase, AdapterException, AdapterRequest, AdapterResponse
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class OllamaException(AdapterException):
 class OllamaAdapter(AdapterBase):
     """Adapter for Ollama."""
 
-    def _init(self):
+    def _init(self, **kwargs):
         self.chat_client = AsyncClient()
 
     async def send_request(self, request: AdapterRequest) -> AdapterResponse:

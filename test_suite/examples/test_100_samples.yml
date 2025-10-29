@@ -18,7 +18,8 @@ pipeline:
       Query: Explain the concept of quantum entanglement.
 
       Please provide a response that matches the specified tone and parameters above.
-    adapter: "ollama"
+    adapter:
+      name: "ollama"
     model: "gpt-oss:20b"
     temperature: 0.7
     top_p: 0.9
@@ -40,7 +41,8 @@ oracles:
   coherence_judge:
     type: "llm_judge"
     model: "gpt-oss:20b"
-    adapter: "ollama"
+    adapter:
+      name: "ollama"
     max_tokens: 2000
     temperature: 1
     rubric: |
@@ -58,7 +60,8 @@ oracles:
   accuracy_judge:
     type: "llm_judge"
     model: "gpt-oss:20b"
-    adapter: "ollama"
+    adapter:
+      name: "ollama"
     max_tokens: 2000
     temperature: 1
     rubric: |
@@ -77,17 +80,17 @@ oracles:
 # Controls PyMC Bayesian modeling and MCMC sampling for posterior inference
 analysis:
   # MCMC sampling parameters
-  mcmc_draws: 2000      # Number of posterior samples per chain
-  mcmc_tune: 1000       # Number of tuning/warmup samples (discarded)
-  mcmc_chains: 4        # Number of independent MCMC chains
+  mcmc_draws: 2000 # Number of posterior samples per chain
+  mcmc_tune: 1000 # Number of tuning/warmup samples (discarded)
+  mcmc_chains: 4 # Number of independent MCMC chains
 
   # Prior parameters for calibration model
-  prior_quality_mu: 3.0      # Prior mean for true quality (1-5 scale)
-  prior_quality_sigma: 1.0   # Prior std for true quality
-  prior_noise_sigma: 0.5     # Prior std for oracle measurement error
+  prior_quality_mu: 3.0 # Prior mean for true quality (1-5 scale)
+  prior_quality_sigma: 1.0 # Prior std for true quality
+  prior_noise_sigma: 0.5 # Prior std for oracle measurement error
 
   # High-Density Interval (HDI) configuration
-  hdi_probability: 0.94      # Credible interval probability (0.89, 0.94, 0.95 common)
+  hdi_probability: 0.94 # Credible interval probability (0.89, 0.94, 0.95 common)
 
 # Axes Configuration
 # Defines the parameter space to explore

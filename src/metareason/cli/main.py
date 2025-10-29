@@ -6,6 +6,7 @@ from pathlib import Path
 import arviz as az
 import click
 import yaml
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -21,6 +22,8 @@ from ..analysis.analyzer import BayesianAnalyzer
 from ..config import SpecConfig
 from ..pipeline import load_spec, runner
 from ..pipeline.runner import SampleResult
+
+load_dotenv()
 
 console = Console()
 

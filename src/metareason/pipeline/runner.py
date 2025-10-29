@@ -5,7 +5,9 @@ from typing import Dict, List
 
 from pydantic import BaseModel
 
-from ..adapters import AdapterRequest, OllamaAdapter
+from metareason.adapters.adapter_factory import get_adapter
+
+from ..adapters import AdapterRequest
 from ..config import SpecConfig
 from ..oracles import EvaluationContext, EvaluationResult, LLMJudge
 from ..sampling import LhsSampler
@@ -42,9 +44,6 @@ async def run(spec_path: Path) -> List[SampleResult]:
         logger.error(f"Failed to load spec: {e}")
         raise
 
-    # Initialize adapter for LLM pipeline
-    adapter = OllamaAdapter()
-
     # Initialize oracles from config
     oracles = {}
     for oracle_name, oracle_config in spec_config.oracles.items():
@@ -60,19 +59,18 @@ async def run(spec_path: Path) -> List[SampleResult]:
     all_tasks = []
 
     for sample in samples:
-        task = _process_sample(spec_config.pipeline, sample, adapter, oracles)
+        task = _process_sample(spec_config.pipeline, sample, oracles)
         all_tasks.append(task)
 
     return await asyncio.gather(*all_tasks)
 
 
-async def _process_sample(pipeline, sample, adapter, oracles):
+async def _process_sample(pipeline, sample, oracles):
     """Process a single sample through the pipeline and evaluate with oracles.
 
     Args:
         pipeline: List of PipelineConfig stages to execute.
         sample: Parameter dictionary for this sample variant.
-        adapter: LLM adapter for executing pipeline stages.
         oracles: Dictionary of oracle_name -> oracle instance for evaluation.
 
     Returns:
@@ -92,6 +90,7 @@ async def _process_sample(pipeline, sample, adapter, oracles):
             # Subsequent stages: use previous response as input
             user_prompt = response
 
+        adapter = get_adapter(pipe.adapter.name, **pipe.adapter.params)
         adapter_request = AdapterRequest(
             model=pipe.model,
             temperature=pipe.temperature,
