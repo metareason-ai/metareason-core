@@ -73,7 +73,37 @@ class GoogleAdapter(AdapterBase):
         self.config = kwargs
 
     async def send_request(self, request: AdapterRequest) -> AdapterResponse:
-        """Send a request to the google adapter (vertex ai or developer api)."""
+        """Send a generation request to Google's AI service.
+
+        This method automatically selects the appropriate backend (Vertex AI or
+        Developer API) based on the adapter configuration, sends the request,
+        and returns the generated response. The client connection is properly
+        closed after the request completes.
+
+        Args:
+            request: AdapterRequest containing the prompt, model, and generation
+                parameters (temperature, max_tokens, etc.).
+
+        Returns:
+            AdapterResponse containing the generated text from the model.
+
+        Raises:
+            GoogleAdapterException: If the request fails due to API errors,
+                network issues, invalid configuration, or missing credentials.
+
+        Example:
+            >>> adapter = GoogleAdapter(vertex_ai=True, project_id="my-project", location="us-central1")
+            >>> request = AdapterRequest(
+            ...     model="gemini-2.0-flash-exp",
+            ...     user_prompt="Explain quantum entanglement",
+            ...     temperature=0.7,
+            ...     top_p=0.9,
+            ...     max_tokens=1000
+            ... )
+            >>> response = await adapter.send_request(request)
+            >>> print(response.response_text)
+        """
+        client = None
         try:
             if self.vertex_ai:
                 client = self._init_vertex_ai()
@@ -87,17 +117,33 @@ class GoogleAdapter(AdapterBase):
                     system_instruction=request.system_prompt,
                     max_output_tokens=request.max_tokens,
                     temperature=request.temperature,
+                    top_p=request.top_p,
                 ),
             )
-            await client.aclose()
             return AdapterResponse(response_text=response.text)
         except Exception as e:
             raise GoogleAdapterException(
                 f"Google adapter request failed: {e}", e
             ) from e
+        finally:
+            if client is not None:
+                await client.aclose()
 
     def _init_vertex_ai(self):
-        """Initialize the google vertex ai client."""
+        """Initialize Google Vertex AI client with project configuration.
+
+        Creates an async client for Google Cloud's Vertex AI service. If the
+        GOOGLE_GENAI_USE_VERTEXAI environment variable is set, uses default
+        credentials from the environment. Otherwise, requires explicit project_id
+        and location in the adapter configuration.
+
+        Returns:
+            Async client configured for Vertex AI.
+
+        Raises:
+            GoogleAdapterException: If project_id or location is missing when
+                GOOGLE_GENAI_USE_VERTEXAI is not set.
+        """
         if not os.getenv("GOOGLE_GENAI_USE_VERTEXAI"):
             if not self.config.get("project_id"):
                 raise GoogleAdapterException(
@@ -113,10 +159,22 @@ class GoogleAdapter(AdapterBase):
                 location=self.config["location"],
             ).aio
         else:
-            return Client().aio
+            return Client(vertexai=True).aio
 
     def _init_developer_api(self):
-        """Initialize the google developer api client."""
+        """Initialize Google Developer API client with API key authentication.
+
+        Creates an async client for Google's Developer API (AI Studio). Uses the
+        GOOGLE_API_KEY environment variable if set, otherwise requires an api_key
+        in the adapter configuration.
+
+        Returns:
+            Async client configured for Developer API.
+
+        Raises:
+            GoogleAdapterException: If api_key is missing and GOOGLE_API_KEY
+                environment variable is not set.
+        """
         if not os.getenv("GOOGLE_API_KEY"):
             if not self.config.get("api_key"):
                 raise GoogleAdapterException(
