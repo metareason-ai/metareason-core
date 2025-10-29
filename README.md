@@ -157,12 +157,15 @@ See [examples/quantum_entanglement_eval.yml](examples/quantum_entanglement_eval.
   - Multiple oracle support
 - ✅ **Pipeline-based execution model** (multi-stage, async)
 - ✅ **CLI interface** (`run`, `validate`, `analyze` commands)
-- ✅ **Ollama adapter** for local models
+- ✅ **LLM adapters** for multiple providers:
+  - Ollama (local models)
+  - OpenAI (GPT models via Responses API)
+  - Google (Gemini models)
+  - Anthropic (Claude models via Messages API)
 
 ### 🚧 Coming Soon
 - 🚧 Parameter effects analysis (Bayesian regression to identify which parameters matter)
 - 🚧 Rich HTML/PDF report generation with visualizations
-- 🚧 Additional LLM adapters (OpenAI, Anthropic, Google)
 - 🚧 Additional oracle types (regex, statistical, custom)
 - 🚧 Additional sampling methods
 

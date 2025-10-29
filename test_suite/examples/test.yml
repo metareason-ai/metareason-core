@@ -18,8 +18,8 @@ pipeline:
 
       Please provide a response that matches the specified tone and parameters above.
     adapter:
-      name: "google"
-    model: "gemini-2.5-flash"
+      name: "anthropic"
+    model: "claude-haiku-4-5"
     temperature: 0.7
     top_p: 0.9
     max_tokens: 10000
@@ -38,10 +38,10 @@ n_variants: 1
 oracles:
   coherence_judge:
     type: "llm_judge"
-    model: "gemini-2.5-flash"
+    model: "claude-sonnet-4-5"
     adapter:
-      name: "google"
-    max_tokens: 2000
+      name: "anthropic"
+    max_tokens: 10000
     temperature: 1
     rubric: |
       Evaluate the response for coherence and logical flow.
@@ -57,10 +57,10 @@ oracles:
 
   accuracy_judge:
     type: "llm_judge"
-    model: "gemini-2.5-flash"
+    model: "claude-sonnet-4-5"
     adapter:
-      name: "google"
-    max_tokens: 2000
+      name: "anthropic"
+    max_tokens: 10000
     temperature: 1
     rubric: |
       Evaluate the factual accuracy of the response.

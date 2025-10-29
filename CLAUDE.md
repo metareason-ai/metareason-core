@@ -23,10 +23,10 @@ MetaReason Core provides statistically rigorous quantitative measurement of LLM 
 - ✅ Bayesian analysis for statistical rigor (PyMC + ArviZ)
 - ✅ Pipeline-based execution model (async, multi-stage)
 - ✅ CLI interface with progress indicators
+- ✅ LLM adapters (Ollama, OpenAI, Google, Anthropic)
 
 **Planned:**
 - 🚧 Rich HTML/PDF report generation with visualizations
-- 🚧 Additional LLM adapters (OpenAI, Anthropic, Google)
 - 🚧 Parameter effects analysis (Bayesian regression)
 
 ## Development Environment
@@ -68,7 +68,7 @@ The project has the following structure:
 
 - `src/metareason/` - Main package directory
   - `config/` - Pydantic models for YAML specification validation
-  - `adapters/` - LLM adapter implementations (currently: Ollama)
+  - `adapters/` - LLM adapter implementations (Ollama, OpenAI, Google, Anthropic)
   - `oracles/` - Evaluation oracles (currently: LLM Judge)
   - `sampling/` - Sampling strategies (currently: Latin Hypercube)
   - `pipeline/` - Template rendering and execution pipeline
@@ -108,12 +108,15 @@ The project has the following structure:
   - Spinner and progress bars for evaluation phase
   - MCMC sampling progress tracking per oracle
   - Real-time status updates
-- **Ollama adapter** for local models
+- **LLM adapters** for multiple providers:
+  - Ollama (local models)
+  - OpenAI (GPT models via modern Responses API)
+  - Google (Gemini models)
+  - Anthropic (Claude models via Messages API)
 - **Comprehensive examples** in `examples/` directory
 
 ### 🚧 In Progress
 - Report generation (currently JSON, HTML/PDF with visualizations planned)
-- Additional adapters (OpenAI, Anthropic, Google GenAI - dependencies installed)
 - Comprehensive test coverage (currently focused on LHS sampler, target 80%)
 
 ### 📋 Planned

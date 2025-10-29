@@ -11,6 +11,7 @@ Functions:
 import logging
 
 from .adapter_base import AdapterBase, AdapterException
+from .anthropic import AnthropicAdapter
 from .google import GoogleAdapter
 from .ollama import OllamaAdapter
 from .openai import OpenAIAdapter
@@ -22,6 +23,7 @@ ADAPTER_REGISTRY = {
     "ollama": OllamaAdapter,
     "google": GoogleAdapter,
     "openai": OpenAIAdapter,
+    "anthropic": AnthropicAdapter,
 }
 
 
