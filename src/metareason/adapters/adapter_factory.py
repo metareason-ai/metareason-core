@@ -13,6 +13,7 @@ import logging
 from .adapter_base import AdapterBase, AdapterException
 from .google import GoogleAdapter
 from .ollama import OllamaAdapter
+from .openai import OpenAIAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 ADAPTER_REGISTRY = {
     "ollama": OllamaAdapter,
     "google": GoogleAdapter,
+    "openai": OpenAIAdapter,
 }
 
 
@@ -30,7 +32,7 @@ def get_adapter(name: str, **kwargs) -> AdapterBase:
     provided name. Configuration can be passed via kwargs.
 
     Args:
-        name: Name of the adapter to create ('ollama', 'google', etc.).
+        name: Name of the adapter to create ('ollama', 'google', 'openai', etc.).
         **kwargs: Configuration parameters to pass to the adapter.
 
     Returns:

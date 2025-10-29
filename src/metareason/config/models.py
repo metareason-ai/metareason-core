@@ -37,7 +37,7 @@ class AdapterConfig(BaseModel):
             )
     """
 
-    name: Literal["ollama", "google"]
+    name: Literal["ollama", "google", "openai"]
     params: Dict[str, Any] = Field(default_factory=dict)
 
 
