@@ -100,11 +100,14 @@ class TestAdapterFactory:
             get_adapter("ollama", api_key="secret123", location="us")
         assert "secret123" not in caplog.text
 
-    @patch("metareason.adapters.adapter_factory.OpenAIAdapter")
-    def test_factory_wraps_init_exception(self, mock_cls):
-        mock_cls.side_effect = TypeError("bad kwarg")
-        with pytest.raises(AdapterException, match="Failed to initialize"):
-            get_adapter("openai")
+    def test_factory_wraps_init_exception(self):
+        mock_cls = MagicMock(side_effect=TypeError("bad kwarg"))
+        with patch.dict(
+            "metareason.adapters.adapter_factory.ADAPTER_REGISTRY",
+            {"openai": mock_cls},
+        ):
+            with pytest.raises(AdapterException, match="Failed to initialize"):
+                get_adapter("openai")
 
 
 # --- Ollama Adapter ---
