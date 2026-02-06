@@ -3,6 +3,9 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+DEFAULT_TIMEOUT = 30  # seconds
+DEFAULT_MAX_RETRIES = 3
+
 
 class AdapterException(Exception):
     """Base exception for adapter-related errors."""

@@ -1,6 +1,7 @@
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from pydantic import ValidationError
 
@@ -339,3 +340,106 @@ class TestGoogleAdapter:
 
         assert result.response_text == "Vertex response"
         mock_aio.aclose.assert_called_once()
+
+
+# --- Retry behavior ---
+
+
+class TestRetryBehavior:
+    @patch("metareason.adapters.openai.AsyncOpenAI")
+    @pytest.mark.asyncio
+    async def test_openai_retry_on_rate_limit(self, mock_openai_cls, adapter_request):
+        from openai import RateLimitError as OpenAIRateLimitError
+
+        mock_response_429 = httpx.Response(
+            429, request=httpx.Request("POST", "https://api.openai.com")
+        )
+        rate_limit_error = OpenAIRateLimitError(
+            "rate limited", response=mock_response_429, body=None
+        )
+
+        mock_success = MagicMock()
+        mock_success.output_text = "success after retry"
+        mock_create = AsyncMock(
+            side_effect=[rate_limit_error, rate_limit_error, mock_success]
+        )
+        mock_client = MagicMock()
+        mock_client.responses.create = mock_create
+        mock_openai_cls.return_value = mock_client
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            adapter = OpenAIAdapter()
+        result = await adapter.send_request(adapter_request)
+
+        assert result.response_text == "success after retry"
+        assert mock_create.call_count == 3
+
+    @patch("metareason.adapters.anthropic.AsyncAnthropic")
+    @pytest.mark.asyncio
+    async def test_anthropic_retry_on_rate_limit(
+        self, mock_anthropic_cls, adapter_request
+    ):
+        from anthropic import RateLimitError as AnthropicRateLimitError
+
+        mock_response_429 = httpx.Response(
+            429, request=httpx.Request("POST", "https://api.anthropic.com")
+        )
+        rate_limit_error = AnthropicRateLimitError(
+            "rate limited", response=mock_response_429, body=None
+        )
+
+        mock_text_block = MagicMock()
+        mock_text_block.text = "success after retry"
+        mock_success = MagicMock()
+        mock_success.content = [mock_text_block]
+        mock_create = AsyncMock(side_effect=[rate_limit_error, mock_success])
+        mock_client = MagicMock()
+        mock_client.messages.create = mock_create
+        mock_anthropic_cls.return_value = mock_client
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            adapter = AnthropicAdapter()
+        result = await adapter.send_request(adapter_request)
+
+        assert result.response_text == "success after retry"
+        assert mock_create.call_count == 2
+
+    @patch("metareason.adapters.ollama.AsyncClient")
+    @pytest.mark.asyncio
+    async def test_ollama_retry_on_connection_error(
+        self, mock_client_cls, adapter_request
+    ):
+        mock_success = MagicMock()
+        mock_success.message.content = "success after retry"
+        mock_chat = AsyncMock(side_effect=[ConnectionError("refused"), mock_success])
+        mock_client_cls.return_value.chat = mock_chat
+
+        adapter = OllamaAdapter()
+        result = await adapter.send_request(adapter_request)
+
+        assert result.response_text == "success after retry"
+        assert mock_chat.call_count == 2
+
+    @patch("metareason.adapters.openai.AsyncOpenAI")
+    @pytest.mark.asyncio
+    async def test_openai_retry_exhausted(self, mock_openai_cls, adapter_request):
+        from openai import RateLimitError as OpenAIRateLimitError
+
+        mock_response_429 = httpx.Response(
+            429, request=httpx.Request("POST", "https://api.openai.com")
+        )
+        rate_limit_error = OpenAIRateLimitError(
+            "rate limited", response=mock_response_429, body=None
+        )
+
+        mock_create = AsyncMock(side_effect=rate_limit_error)
+        mock_client = MagicMock()
+        mock_client.responses.create = mock_create
+        mock_openai_cls.return_value = mock_client
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            adapter = OpenAIAdapter()
+        with pytest.raises(OpenAIRateLimitError):
+            await adapter.send_request(adapter_request)
+
+        assert mock_create.call_count == 3
