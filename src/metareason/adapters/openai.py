@@ -1,6 +1,6 @@
 import os
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAIError
 
 from .adapter_base import AdapterBase, AdapterException, AdapterRequest, AdapterResponse
 
@@ -77,5 +77,5 @@ class OpenAIAdapter(AdapterBase):
             )
 
             return AdapterResponse(response_text=response.output_text)
-        except Exception as e:
+        except OpenAIError as e:
             raise OpenAIAdapterException(f"OpenAI API request failed: {e}", e) from e

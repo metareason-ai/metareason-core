@@ -67,5 +67,5 @@ def get_adapter(name: str, **kwargs) -> AdapterBase:
     adapter_class = ADAPTER_REGISTRY[name]
     try:
         return adapter_class(**kwargs)
-    except Exception as e:
+    except (TypeError, AdapterException) as e:
         raise AdapterException(f"Failed to initialize {name} adapter: {str(e)}") from e

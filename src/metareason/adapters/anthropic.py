@@ -1,7 +1,7 @@
 import logging
 import os
 
-from anthropic import AsyncAnthropic
+from anthropic import AnthropicError, AsyncAnthropic
 
 from .adapter_base import AdapterBase, AdapterException, AdapterRequest, AdapterResponse
 
@@ -79,7 +79,7 @@ class AnthropicAdapter(AdapterBase):
             )
 
             return AdapterResponse(response_text=response.content[0].text)
-        except Exception as e:
+        except AnthropicError as e:
             raise AnthropicAdapterException(
                 f"Anthropic API request failed: {e}", e
             ) from e

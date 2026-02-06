@@ -24,7 +24,7 @@ class EvaluationContext(BaseModel):
 class EvaluationResult(BaseModel):
     """Response from an oracle evaluation."""
 
-    score: float = Field(ge=0.0, le=5.0)
+    score: float = Field(ge=1.0, le=5.0)
     explanation: Optional[str] = None
 
 
@@ -35,17 +35,16 @@ class OracleBase(ABC):
         self.config = config
 
     @abstractmethod
-    def evaluate(self, request: EvaluationContext) -> EvaluationResult: ...
+    def evaluate(self, request: EvaluationContext) -> EvaluationResult:
+        """Evaluate an LLM response.
 
-    """
-    Evaluate an LLM response.
+        Args:
+            request: The oracle request containing prompt and response
 
-    Args:
-        request: The oracle request containing prompt and response
+        Returns:
+            EvaluationResult with score and optional reasoning.
 
-    Resposne:
-        OracleResponse with score and optional reasoning.
-
-    Raises:
-        OracleException: If evaluation fails
-    """
+        Raises:
+            OracleException: If evaluation fails
+        """
+        ...
