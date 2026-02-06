@@ -26,7 +26,6 @@ MetaReason Core provides statistically rigorous quantitative measurement of LLM 
 - ✅ LLM adapters (Ollama, OpenAI, Google, Anthropic)
 
 **Planned:**
-- 🚧 Rich HTML/PDF report generation with visualizations
 - 🚧 Parameter effects analysis (Bayesian regression)
 
 ## Development Environment
@@ -58,7 +57,7 @@ bandit -r src
 # Run all formatting
 ./scripts/format.sh
 
-# Run tests (when implemented)
+# Run tests
 ./scripts/test.sh
 ```
 
@@ -74,7 +73,8 @@ The project has the following structure:
   - `pipeline/` - Template rendering and execution pipeline
   - `analysis/` - Bayesian statistical analysis with PyMC
   - `cli/` - Click-based command-line interface with rich output
-- `tests/` - Test directory (currently: LHS sampler tests with 11 test cases)
+  - `reporting/` - HTML report generation with visualizations
+- `tests/` - Test directory (120+ tests, 82% coverage)
 - `examples/` - Example YAML specifications demonstrating features
 - `test_suite/` - Additional test specifications
 - `reports/` - Output directory for evaluation results (JSON)
@@ -100,10 +100,17 @@ The project has the following structure:
   - JSON-based scoring with explanations
   - Multiple oracle support
 - **Async pipeline execution** with multi-stage support
-- **CLI interface** with three commands:
-  - `metareason run` - Execute evaluations with optional `--analyze` flag
+- **HTML report generation** with self-contained visualizations
+  - Posterior distribution plots with HDI regions
+  - Score distribution histograms
+  - Oracle variability plots
+  - Parameter space coverage scatter plots
+  - Jinja2 templates with base64-embedded images
+- **CLI interface** with four commands:
+  - `metareason run` - Execute evaluations with optional `--analyze` and `--report` flags
   - `metareason validate` - Validate YAML specification files
-  - `metareason analyze` - Perform Bayesian analysis on saved results
+  - `metareason analyze` - Perform Bayesian analysis on saved results with optional `--report` flag
+  - `metareason report` - Generate HTML report from saved results
 - **Progress indicators** using rich library
   - Spinner and progress bars for evaluation phase
   - MCMC sampling progress tracking per oracle
@@ -114,16 +121,13 @@ The project has the following structure:
   - Google (Gemini models)
   - Anthropic (Claude models via Messages API)
 - **Comprehensive examples** in `examples/` directory
-
-### 🚧 In Progress
-- Report generation (currently JSON, HTML/PDF with visualizations planned)
-- Comprehensive test coverage (currently focused on LHS sampler, target 80%)
+- **Adapter resilience** with tenacity retry decorators and configurable timeouts
+- **82% test coverage** with 120+ tests across all modules
 
 ### 📋 Planned
 - Parameter effects analysis (Bayesian regression to identify which parameters matter)
 - Additional oracle types (regex, keyword, statistical, custom)
 - Additional sampling methods beyond LHS
-- Rich HTML/PDF visualization reports with posterior plots
 
 ## Claude's Role
 
@@ -137,7 +141,7 @@ The project has the following structure:
 ## Important Notes
 
 - **Python 3.13+ required**: The project targets Python 3.13 or higher
-- **Test coverage requirement**: 80% coverage target (currently focused on core sampling functionality)
+- **Test coverage requirement**: 80% coverage target (currently at 82%)
 - **Always use venv**: All commands should be run within the virtual environment
 - **Statistical rigor**: The core differentiator is Bayesian analysis providing credible intervals, not just point estimates
 
@@ -150,6 +154,8 @@ Key dependencies specified in pyproject.toml:
 - **jinja2** - Template rendering
 - **httpx** - Async HTTP client
 - **openai/anthropic/google-genai** - LLM API clients
+- **tenacity** - Retry logic for adapter resilience
+- **matplotlib** - Visualization for HTML reports
 
 ## Development Philosophy
 
