@@ -1,8 +1,22 @@
 import os
 
-from openai import AsyncOpenAI, OpenAIError
+import httpx
+from openai import APIConnectionError, AsyncOpenAI, OpenAIError, RateLimitError
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
-from .adapter_base import AdapterBase, AdapterException, AdapterRequest, AdapterResponse
+from .adapter_base import (
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_TIMEOUT,
+    AdapterBase,
+    AdapterException,
+    AdapterRequest,
+    AdapterResponse,
+)
 
 
 class OpenAIAdapterException(AdapterException):
@@ -43,8 +57,16 @@ class OpenAIAdapter(AdapterBase):
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise OpenAIAdapterException("OPENAI_API_KEY environment variable not set.")
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = AsyncOpenAI(
+            api_key=api_key, timeout=httpx.Timeout(DEFAULT_TIMEOUT)
+        )
 
+    @retry(
+        stop=stop_after_attempt(DEFAULT_MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=1, max=10),
+        retry=retry_if_exception_type((RateLimitError, APIConnectionError)),
+        reraise=True,
+    )
     async def send_request(self, request: AdapterRequest) -> AdapterResponse:
         """Send a request to the OpenAI API and return the response.
 
@@ -77,5 +99,7 @@ class OpenAIAdapter(AdapterBase):
             )
 
             return AdapterResponse(response_text=response.output_text)
+        except (RateLimitError, APIConnectionError):
+            raise
         except OpenAIError as e:
             raise OpenAIAdapterException(f"OpenAI API request failed: {e}", e) from e

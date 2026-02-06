@@ -1,8 +1,22 @@
 import logging
 
+import httpx
 from ollama import AsyncClient, ChatResponse, RequestError, ResponseError
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
-from .adapter_base import AdapterBase, AdapterException, AdapterRequest, AdapterResponse
+from .adapter_base import (
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_TIMEOUT,
+    AdapterBase,
+    AdapterException,
+    AdapterRequest,
+    AdapterResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +31,16 @@ class OllamaAdapter(AdapterBase):
     """Adapter for Ollama."""
 
     def _init(self, **kwargs):
-        self.chat_client = AsyncClient()
+        self.chat_client = AsyncClient(timeout=DEFAULT_TIMEOUT)
 
+    @retry(
+        stop=stop_after_attempt(DEFAULT_MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=1, max=10),
+        retry=retry_if_exception_type(
+            (RequestError, ConnectionError, httpx.ConnectError)
+        ),
+        reraise=True,
+    )
     async def send_request(self, request: AdapterRequest) -> AdapterResponse:
         try:
 

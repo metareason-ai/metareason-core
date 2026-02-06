@@ -1,9 +1,28 @@
 import logging
 import os
 
-from anthropic import AnthropicError, AsyncAnthropic
+import httpx
+from anthropic import (
+    AnthropicError,
+    APIConnectionError,
+    AsyncAnthropic,
+    RateLimitError,
+)
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
-from .adapter_base import AdapterBase, AdapterException, AdapterRequest, AdapterResponse
+from .adapter_base import (
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_TIMEOUT,
+    AdapterBase,
+    AdapterException,
+    AdapterRequest,
+    AdapterResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +67,16 @@ class AnthropicAdapter(AdapterBase):
             raise AnthropicAdapterException(
                 "ANTHROPIC_API_KEY environment variable not set."
             )
-        self.client = AsyncAnthropic(api_key=api_key)
+        self.client = AsyncAnthropic(
+            api_key=api_key, timeout=httpx.Timeout(DEFAULT_TIMEOUT)
+        )
 
+    @retry(
+        stop=stop_after_attempt(DEFAULT_MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=1, max=10),
+        retry=retry_if_exception_type((RateLimitError, APIConnectionError)),
+        reraise=True,
+    )
     async def send_request(self, request: AdapterRequest) -> AdapterResponse:
         """Send a request to the Anthropic API and return the response.
 
@@ -79,6 +106,8 @@ class AnthropicAdapter(AdapterBase):
             )
 
             return AdapterResponse(response_text=response.content[0].text)
+        except (RateLimitError, APIConnectionError):
+            raise
         except AnthropicError as e:
             raise AnthropicAdapterException(
                 f"Anthropic API request failed: {e}", e

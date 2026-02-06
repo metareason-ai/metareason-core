@@ -1,10 +1,25 @@
+import asyncio
 import logging
 import os
 
+import httpx
 from google.genai import Client, types
 from google.genai.errors import APIError as GoogleAPIError
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
-from .adapter_base import AdapterBase, AdapterException, AdapterRequest, AdapterResponse
+from .adapter_base import (
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_TIMEOUT,
+    AdapterBase,
+    AdapterException,
+    AdapterRequest,
+    AdapterResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +41,17 @@ class GoogleAdapterException(AdapterException):
         """
         super().__init__(message)
         self.original_exception = original_exception
+
+
+def _is_retryable_google_error(exception):
+    """Check if a Google API error is retryable (rate limit or server error)."""
+    if isinstance(exception, GoogleAPIError):
+        code = getattr(exception, "status", None)
+        if code and isinstance(code, int):
+            return code == 429 or code >= 500
+    if isinstance(exception, (ConnectionError, httpx.ConnectError)):
+        return True
+    return False
 
 
 class GoogleAdapter(AdapterBase):
@@ -73,6 +99,12 @@ class GoogleAdapter(AdapterBase):
         self.vertex_ai = kwargs.get("vertex_ai")
         self.config = kwargs
 
+    @retry(
+        stop=stop_after_attempt(DEFAULT_MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=1, max=10),
+        retry=retry_if_exception(_is_retryable_google_error),
+        reraise=True,
+    )
     async def send_request(self, request: AdapterRequest) -> AdapterResponse:
         """Send a generation request to Google's AI service.
 
@@ -111,20 +143,27 @@ class GoogleAdapter(AdapterBase):
             else:
                 client = self._init_developer_api()
 
-            response = await client.models.generate_content(
-                model=request.model,
-                contents=request.user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=request.system_prompt,
-                    max_output_tokens=request.max_tokens,
-                    temperature=request.temperature,
-                    top_p=request.top_p,
+            response = await asyncio.wait_for(
+                client.models.generate_content(
+                    model=request.model,
+                    contents=request.user_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=request.system_prompt,
+                        max_output_tokens=request.max_tokens,
+                        temperature=request.temperature,
+                        top_p=request.top_p,
+                    ),
                 ),
+                timeout=DEFAULT_TIMEOUT,
             )
             return AdapterResponse(response_text=response.text)
         except GoogleAPIError as e:
             raise GoogleAdapterException(
                 f"Google adapter request failed: {e}", e
+            ) from e
+        except asyncio.TimeoutError as e:
+            raise GoogleAdapterException(
+                f"Google adapter request timed out after {DEFAULT_TIMEOUT}s", e
             ) from e
         finally:
             if client is not None:
