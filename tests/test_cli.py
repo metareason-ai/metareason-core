@@ -288,3 +288,147 @@ class TestAnalyzeCommand:
         )
 
         assert "not found" in result.output
+
+
+# --- report command ---
+
+
+class TestReportCommand:
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.load_spec")
+    def test_report_standalone_command(
+        self, mock_load_spec, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        from metareason.pipeline.loader import load_spec as real_load_spec
+
+        spec_file = tmp_path / "spec.yaml"
+        spec_file.write_text(VALID_SPEC_YAML)
+        results_file = tmp_path / "results.json"
+        results_file.write_text(json.dumps(make_results_data()))
+        report_file = tmp_path / "report.html"
+
+        mock_load_spec.return_value = real_load_spec(spec_file)
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        with patch("metareason.reporting.ReportGenerator") as mock_report_gen:
+            mock_generator = MagicMock()
+            mock_report_gen.return_value = mock_generator
+
+            result = cli_runner.invoke(
+                metareason,
+                [
+                    "report",
+                    str(results_file),
+                    "--spec",
+                    str(spec_file),
+                    "--output",
+                    str(report_file),
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert "HTML report saved" in result.output
+            mock_generator.generate_html.assert_called_once()
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.load_spec")
+    def test_analyze_with_report_flag(
+        self, mock_load_spec, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        from metareason.pipeline.loader import load_spec as real_load_spec
+
+        spec_file = tmp_path / "spec.yaml"
+        spec_file.write_text(VALID_SPEC_YAML)
+        results_file = tmp_path / "results.json"
+        results_file.write_text(json.dumps(make_results_data()))
+
+        mock_load_spec.return_value = real_load_spec(spec_file)
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        with patch("metareason.reporting.ReportGenerator") as mock_report_gen:
+            mock_generator = MagicMock()
+            mock_report_gen.return_value = mock_generator
+
+            result = cli_runner.invoke(
+                metareason,
+                [
+                    "analyze",
+                    str(results_file),
+                    "--spec",
+                    str(spec_file),
+                    "--report",
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert "HTML report saved" in result.output
+            mock_generator.generate_html.assert_called_once()
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.runner")
+    @patch("metareason.cli.main.load_spec")
+    def test_run_with_report_flag(
+        self,
+        mock_load_spec,
+        mock_runner,
+        mock_analyzer_class,
+        cli_runner,
+        tmp_path,
+    ):
+        from metareason.pipeline.loader import load_spec as real_load_spec
+
+        spec_file = tmp_path / "spec.yaml"
+        spec_file.write_text(VALID_SPEC_YAML)
+        output_file = tmp_path / "results.json"
+
+        mock_load_spec.return_value = real_load_spec(spec_file)
+        mock_runner.run = AsyncMock(return_value=[make_sample_result()])
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        with patch("metareason.reporting.ReportGenerator") as mock_report_gen:
+            mock_generator = MagicMock()
+            mock_report_gen.return_value = mock_generator
+
+            result = cli_runner.invoke(
+                metareason,
+                [
+                    "run",
+                    str(spec_file),
+                    "--output",
+                    str(output_file),
+                    "--analyze",
+                    "--report",
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert "HTML report saved" in result.output
+            mock_report_gen.assert_called_once()
+
+    def test_report_missing_results_file(self, cli_runner, tmp_path):
+        spec_file = tmp_path / "spec.yaml"
+        spec_file.write_text(VALID_SPEC_YAML)
+        missing_results = str(tmp_path / "nonexistent.json")
+
+        result = cli_runner.invoke(
+            metareason,
+            ["report", missing_results, "--spec", str(spec_file)],
+        )
+
+        # Click's exists=True validation catches missing file
+        assert result.exit_code != 0

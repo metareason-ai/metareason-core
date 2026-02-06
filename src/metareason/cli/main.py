@@ -137,7 +137,12 @@ def metareason():
     is_flag=True,
     help="Perform Bayesian analysis on results after evaluation",
 )
-def run(spec, output, analyze):
+@click.option(
+    "--report",
+    is_flag=True,
+    help="Generate HTML report after analysis",
+)
+def run(spec, output, analyze, report):
     """Run an evaluation based on a specification file."""
     try:
         spec_path = Path(spec)
@@ -351,6 +356,15 @@ def run(spec, output, analyze):
                     f"[green]✓ Population quality analysis for {oracle_name} saved to {analysis_path}[/green]"
                 )
 
+        # Generate HTML report if requested
+        if report and analyze and "analysis_results" in locals() and analysis_results:
+            from ..reporting import ReportGenerator
+
+            generator = ReportGenerator(responses, spec_config, analysis_results)
+            report_path = output_path.with_suffix(".html")
+            generator.generate_html(report_path)
+            console.print(f"[green]✓ HTML report saved to {report_path}[/green]")
+
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise
@@ -385,7 +399,12 @@ def validate(spec):
     "-o",
     help="Specific oracle to analyze (if not specified, analyzes all)",
 )
-def analyze(results_json, spec, oracle):
+@click.option(
+    "--report",
+    is_flag=True,
+    help="Generate HTML report after analysis",
+)
+def analyze(results_json, spec, oracle, report):
     """Perform Bayesian analysis on previously saved evaluation results.
 
     This command loads evaluation results from a JSON file and runs Bayesian
@@ -498,6 +517,91 @@ def analyze(results_json, spec, oracle):
                 console.print(
                     f"[green]✓ Population quality analysis for {oracle_name} saved to {analysis_path}[/green]"
                 )
+
+        # Generate HTML report if requested
+        if report and analysis_results:
+            from ..reporting import ReportGenerator
+
+            generator = ReportGenerator(results, spec_config, analysis_results)
+            report_path = results_path.with_suffix(".html")
+            generator.generate_html(report_path)
+            console.print(f"[green]✓ HTML report saved to {report_path}[/green]")
+
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: File not found - {e}[/red]")
+    except json.JSONDecodeError as e:
+        console.print(f"[red]Error: Invalid JSON in results file - {e}[/red]")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise
+
+
+@metareason.command()
+@click.argument("results_json", type=click.Path(exists=True))
+@click.option(
+    "--spec",
+    "-s",
+    required=True,
+    type=click.Path(exists=True),
+    help="Specification file",
+)
+@click.option("--output", "-o", help="Output path for HTML report")
+def report(results_json, spec, output):
+    """Generate an HTML report from evaluation results."""
+    try:
+        results_path = Path(results_json)
+        spec_path = Path(spec)
+
+        # Load spec
+        console.print(f"[cyan]Loading spec from:[/cyan] {spec_path}")
+        spec_config = load_spec(spec_path)
+
+        # Load results
+        console.print(f"[cyan]Loading results from:[/cyan] {results_path}")
+        with open(results_path, "r") as f:
+            results_data = json.load(f)
+        results = [SampleResult(**r) for r in results_data]
+        console.print(f"[green]✓ Loaded {len(results)} results[/green]\n")
+
+        # Run Bayesian analysis
+        console.print("[bold blue]Running Bayesian Analysis...[/bold blue]\n")
+        analyzer = BayesianAnalyzer(results, spec_config)
+        hdi_prob = (
+            spec_config.analysis.hdi_probability if spec_config.analysis else 0.94
+        )
+
+        analysis_results = {}
+        oracle_names = list(spec_config.oracles.keys())
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("[cyan]Analyzing...", total=len(oracle_names))
+            for oracle_name in oracle_names:
+                pop_result = analyzer.estimate_population_quality(
+                    oracle_name, hdi_prob=hdi_prob
+                )
+                analysis_results[oracle_name] = pop_result
+                progress.update(task, advance=1)
+
+        # Generate report
+        from ..reporting import ReportGenerator
+
+        generator = ReportGenerator(results, spec_config, analysis_results)
+
+        if output:
+            report_path = Path(output)
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            spec_name = Path(spec).stem
+            report_path = Path("reports") / f"{spec_name}_{timestamp}_report.html"
+
+        generator.generate_html(report_path)
+        console.print(f"\n[green]✓ HTML report saved to {report_path}[/green]")
 
     except FileNotFoundError as e:
         console.print(f"[red]Error: File not found - {e}[/red]")
