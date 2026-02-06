@@ -11,7 +11,6 @@ from tenacity import (
 
 from .adapter_base import (
     DEFAULT_MAX_RETRIES,
-    DEFAULT_TIMEOUT,
     AdapterBase,
     AdapterException,
     AdapterRequest,
@@ -31,7 +30,8 @@ class OllamaAdapter(AdapterBase):
     """Adapter for Ollama."""
 
     def _init(self, **kwargs):
-        self.chat_client = AsyncClient(timeout=DEFAULT_TIMEOUT)
+        # Local models need longer timeouts than cloud APIs
+        self.chat_client = AsyncClient(timeout=300)
 
     @retry(
         stop=stop_after_attempt(DEFAULT_MAX_RETRIES),

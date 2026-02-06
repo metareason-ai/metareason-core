@@ -1,0 +1,65 @@
+spec_id: "quick_test"
+
+pipeline:
+  - template: |
+      You are a helpful assistant. Respond with the specified tone and detail level.
+
+      Tone: {{ tone }}
+      Detail Level: {{ detail_level }}
+
+      Query: Explain how a compiler works.
+    adapter:
+      name: "ollama"
+    model: "gemma3:27b"
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 500
+
+sampling:
+  method: "latin_hypercube"
+  optimization: "maximin"
+  random_seed: 42
+
+n_variants: 5
+
+oracles:
+  clarity_judge:
+    type: "llm_judge"
+    model: "gemma3:27b"
+    adapter:
+      name: "ollama"
+    max_tokens: 500
+    temperature: 1
+    rubric: |
+      Evaluate the response for clarity and how well it explains the concept.
+
+      Rate on a scale of 1-5:
+      - 1: Confusing and unclear
+      - 2: Somewhat clear but hard to follow
+      - 3: Moderately clear
+      - 4: Clear and easy to understand
+      - 5: Exceptionally clear and well-explained
+
+      Provide your rating as a JSON object: {"score": X, "explanation": "..."}
+
+analysis:
+  mcmc_draws: 1000
+  mcmc_tune: 500
+  mcmc_chains: 2
+  prior_quality_mu: 3.0
+  prior_quality_sigma: 1.0
+  prior_noise_sigma: 0.5
+  hdi_probability: 0.94
+
+axes:
+  - name: "tone"
+    type: "categorical"
+    values: ["formal", "casual", "technical"]
+    weights: [0.33, 0.34, 0.33]
+
+  - name: "detail_level"
+    type: "continuous"
+    distribution: "uniform"
+    params:
+      low: 1.0
+      high: 10.0

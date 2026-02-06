@@ -85,6 +85,40 @@ class TestLLMJudgeEvaluate:
 
     @patch("metareason.oracles.llm_judge.get_adapter")
     @pytest.mark.asyncio
+    async def test_evaluate_with_text_before_code_block(
+        self, mock_get_adapter, eval_context
+    ):
+        mock_adapter = AsyncMock()
+        mock_adapter.send_request.return_value = AdapterResponse(
+            response_text='Here is my evaluation:\n```json\n{"score": 5, "explanation": "excellent"}\n```'
+        )
+        mock_get_adapter.return_value = mock_adapter
+
+        judge = LLMJudge(make_oracle_config())
+        result = await judge.evaluate(eval_context)
+
+        assert result.score == 5.0
+        assert result.explanation == "excellent"
+
+    @patch("metareason.oracles.llm_judge.get_adapter")
+    @pytest.mark.asyncio
+    async def test_evaluate_with_code_block_no_lang_tag(
+        self, mock_get_adapter, eval_context
+    ):
+        mock_adapter = AsyncMock()
+        mock_adapter.send_request.return_value = AdapterResponse(
+            response_text='Some preamble\n```\n{"score": 2, "explanation": "poor"}\n```'
+        )
+        mock_get_adapter.return_value = mock_adapter
+
+        judge = LLMJudge(make_oracle_config())
+        result = await judge.evaluate(eval_context)
+
+        assert result.score == 2.0
+        assert result.explanation == "poor"
+
+    @patch("metareason.oracles.llm_judge.get_adapter")
+    @pytest.mark.asyncio
     async def test_evaluate_missing_score_field(self, mock_get_adapter, eval_context):
         mock_adapter = AsyncMock()
         mock_adapter.send_request.return_value = AdapterResponse(

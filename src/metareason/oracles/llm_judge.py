@@ -13,6 +13,7 @@ Classes:
 """
 
 import json
+import re
 
 from metareason.adapters.adapter_base import AdapterResponse
 from metareason.adapters.adapter_factory import get_adapter
@@ -137,8 +138,13 @@ class LLMJudge(OracleBase):
                 adapter_request
             )
             cleaned = adapter_response.response_text.strip()
-            if cleaned.startswith("```"):
-                cleaned = cleaned.split("\n", 1)[1].rsplit("\n", 1)[0]
+
+            # Extract JSON from markdown code blocks anywhere in the response
+            code_block_match = re.search(
+                r"```(?:json)?\s*\n(.*?)\n\s*```", cleaned, re.DOTALL
+            )
+            if code_block_match:
+                cleaned = code_block_match.group(1).strip()
 
             response = json.loads(cleaned)
 
