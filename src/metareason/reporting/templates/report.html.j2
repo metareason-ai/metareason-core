@@ -1,0 +1,86 @@
+{% extends "base.html.j2" %}
+{% block content %}
+
+<h1>MetaReason Evaluation Report</h1>
+<div class="metadata">
+    Spec: {{ spec_id }} | Variants: {{ n_variants }} | Oracles: {{ n_oracles }} | Generated: {{ timestamp }}
+</div>
+
+{% for oracle_name, analysis in oracle_analyses.items() %}
+<div class="section">
+    <h2>{{ oracle_name }}</h2>
+
+    <div class="finding">
+        We are {{ hdi_pct }}% confident the true {{ oracle_name }} quality is between
+        {{ analysis.hdi_lower | round(2) }} and {{ analysis.hdi_upper | round(2) }}
+    </div>
+
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ analysis.population_mean | round(3) }}</div>
+            <div class="stat-label">Mean</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ analysis.population_median | round(3) }}</div>
+            <div class="stat-label">Median</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ analysis.hdi_lower | round(3) }} - {{ analysis.hdi_upper | round(3) }}</div>
+            <div class="stat-label">{{ hdi_pct }}% HDI</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ analysis.oracle_noise_mean | round(3) }}</div>
+            <div class="stat-label">Oracle Noise</div>
+        </div>
+    </div>
+
+    {% if figures[oracle_name] %}
+    <h3>Posterior Distribution</h3>
+    <img src="data:image/png;base64,{{ figures[oracle_name].posterior }}" alt="Posterior distribution">
+
+    <h3>Score Distribution</h3>
+    <img src="data:image/png;base64,{{ figures[oracle_name].scores }}" alt="Score distribution">
+
+    <h3>Oracle Variability</h3>
+    <img src="data:image/png;base64,{{ figures[oracle_name].variability }}" alt="Oracle variability">
+
+    {% if figures[oracle_name].parameter_space %}
+    <h3>Parameter Space Coverage</h3>
+    <img src="data:image/png;base64,{{ figures[oracle_name].parameter_space }}" alt="Parameter space">
+    {% endif %}
+
+    {% if figures[oracle_name].convergence %}
+    <h3>Convergence Diagnostics</h3>
+    <img src="data:image/png;base64,{{ figures[oracle_name].convergence }}" alt="Convergence diagnostics">
+    {% endif %}
+    {% endif %}
+</div>
+{% endfor %}
+
+<div class="section">
+    <h2>Evaluation Data</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Parameters</th>
+                {% for oracle_name in oracle_analyses.keys() %}
+                <th>{{ oracle_name }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in results %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{% for k, v in result.sample_params.items() %}{{ k }}={{ v if v is string else "%.2f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+                {% for oracle_name in oracle_analyses.keys() %}
+                <td>{{ result.evaluations[oracle_name].score | round(2) }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
