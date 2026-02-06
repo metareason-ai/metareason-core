@@ -1,3 +1,4 @@
+from .report_generator import ReportGenerator
 from .visualizations import (
     figure_to_base64,
     plot_convergence_diagnostics,
@@ -8,6 +9,7 @@ from .visualizations import (
 )
 
 __all__ = [
+    "ReportGenerator",
     "figure_to_base64",
     "plot_convergence_diagnostics",
     "plot_oracle_variability",
