@@ -68,7 +68,7 @@ graph LR
 
 ```bash
 # Clone the repository
-git clone https://github.com/jeffgbradley2/metareason-ai/metareason-core.git
+git clone https://github.com/metareason-ai/metareason-core.git
 cd metareason-core
 
 # Create and activate virtual environment
@@ -103,8 +103,13 @@ This will:
 metareason analyze reports/my_results.json --spec examples/quantum_entanglement_eval.yml
 ```
 
-4. **View results**:
-Results are saved as JSON in the `reports/` directory with timestamps.
+4. **Generate an HTML report**:
+```bash
+metareason report reports/my_results.json --spec examples/quantum_entanglement_eval.yml
+```
+
+5. **View results**:
+Results are saved as JSON in the `reports/` directory with timestamps. HTML reports are self-contained files with embedded visualizations.
 
 ### Bayesian Analysis Output
 
@@ -156,7 +161,12 @@ See [examples/quantum_entanglement_eval.yml](examples/quantum_entanglement_eval.
   - JSON-based evaluation with scores and explanations
   - Multiple oracle support
 - ✅ **Pipeline-based execution model** (multi-stage, async)
-- ✅ **CLI interface** (`run`, `validate`, `analyze` commands)
+- ✅ **HTML report generation** with embedded visualizations
+  - Posterior distribution plots with HDI regions
+  - Score distribution histograms
+  - Oracle variability plots
+  - Parameter space coverage scatter plots
+- ✅ **CLI interface** (`run`, `validate`, `analyze`, `report` commands)
 - ✅ **LLM adapters** for multiple providers:
   - Ollama (local models)
   - OpenAI (GPT models via Responses API)
@@ -165,7 +175,6 @@ See [examples/quantum_entanglement_eval.yml](examples/quantum_entanglement_eval.
 
 ### 🚧 Coming Soon
 - 🚧 Parameter effects analysis (Bayesian regression to identify which parameters matter)
-- 🚧 Rich HTML/PDF report generation with visualizations
 - 🚧 Additional oracle types (regex, statistical, custom)
 - 🚧 Additional sampling methods
 
@@ -199,18 +208,76 @@ bandit -r src
 pytest
 ```
 
+## Troubleshooting
+
+### PyMC / JAX Installation Issues
+
+PyMC depends on PyTensor and optionally JAX. If you see compilation errors:
+
+```bash
+# Ensure you have a C compiler available
+# macOS: xcode-select --install
+# Ubuntu: sudo apt install build-essential
+
+# If PyMC install fails, try upgrading pip first
+pip install --upgrade pip setuptools wheel
+pip install -e ".[dev]"
+```
+
+On Apple Silicon (M1/M2/M3), PyMC works natively. If you see JAX-related warnings, they are typically informational and do not affect functionality.
+
+### Ollama Connection Issues
+
+If using the Ollama adapter and getting connection errors:
+
+```bash
+# Verify Ollama is running
+curl http://localhost:11434/api/tags
+
+# If not running, start it
+ollama serve
+
+# Verify your model is available
+ollama list
+```
+
+The default Ollama endpoint is `http://localhost:11434`. To use a different host, set it in your adapter config.
+
+### API Key Configuration
+
+For cloud LLM providers, set API keys as environment variables or in a `.env` file:
+
+```bash
+# OpenAI
+export OPENAI_API_KEY="sk-..."
+
+# Anthropic
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Google (Developer API)
+export GOOGLE_API_KEY="..."
+
+# Or add to .env file in the project root (loaded automatically)
+echo 'OPENAI_API_KEY=sk-...' >> .env
+```
+
+### Common YAML Spec Errors
+
+Use `metareason validate` to check your spec file before running:
+
+```bash
+metareason validate my_spec.yml
+```
+
+Common issues:
+- **Empty pipeline or oracles**: Both `pipeline` and `oracles` must have at least one entry
+- **Missing adapter name**: Each pipeline stage needs an `adapter.name` field
+- **Invalid distribution**: Continuous axes support `uniform`, `normal`, `truncnorm`, and `beta`
+- **Temperature out of range**: Must be between 0.0 and 2.0
+
 ## 🤝 Contributing
 
-We welcome contributions! MetaReason Core is built by the community, for the community.
-
-### Quick Contribution Steps
-
-- Fork the repository
-- Create a feature branch (git checkout -b feature/amazing-feature)
-- Commit your changes (git commit -m 'Add amazing feature')
-- Push to the branch (git push origin feature/amazing-feature)
-- Open a Pull Request
-
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow, code style guide, testing requirements, and PR process.
 
 ## 📜 License
 
