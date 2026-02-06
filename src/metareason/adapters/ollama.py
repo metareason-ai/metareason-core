@@ -1,6 +1,6 @@
 import logging
 
-from ollama import AsyncClient, ChatResponse
+from ollama import AsyncClient, ChatResponse, RequestError, ResponseError
 
 from .adapter_base import AdapterBase, AdapterException, AdapterRequest, AdapterResponse
 
@@ -45,5 +45,5 @@ class OllamaAdapter(AdapterBase):
             raise OllamaException(
                 f"Model {request.model} not found in local Ollama engine: {e}", e
             ) from e
-        except Exception as e:
+        except (RequestError, ResponseError) as e:
             raise OllamaException(f"Ollama request failed: {e}", e) from e

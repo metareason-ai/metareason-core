@@ -127,7 +127,7 @@ class LhsSampler:
             return beta.ppf(uniform_samples, alpha, beta_param)
 
         else:
-            raise ValueError(f"Unkown distribution: {distribution}")
+            raise ValueError(f"Unknown distribution: {distribution}")
 
     def _generate_categorical_samples(self, n_samples: int) -> np.ndarray:
         if not self.categorical_axes:

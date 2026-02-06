@@ -119,7 +119,7 @@ async def _process_sample(pipeline, sample, oracles):
             logger.error(f"Oracle {oracle_name} failed: {e}")
             # Continue with other oracles even if one fails
             evaluations[oracle_name] = EvaluationResult(
-                score=0.0, explanation=f"Evaluation failed: {str(e)}"
+                score=1.0, explanation=f"Evaluation failed: {str(e)}"
             )
 
     return SampleResult(

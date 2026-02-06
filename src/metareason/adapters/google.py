@@ -2,6 +2,7 @@ import logging
 import os
 
 from google.genai import Client, types
+from google.genai.errors import APIError as GoogleAPIError
 
 from .adapter_base import AdapterBase, AdapterException, AdapterRequest, AdapterResponse
 
@@ -121,7 +122,7 @@ class GoogleAdapter(AdapterBase):
                 ),
             )
             return AdapterResponse(response_text=response.text)
-        except Exception as e:
+        except GoogleAPIError as e:
             raise GoogleAdapterException(
                 f"Google adapter request failed: {e}", e
             ) from e

@@ -133,10 +133,10 @@ class LLMJudge(OracleBase):
                 max_tokens=self.config.max_tokens,
             )
 
-            adapter_resposne: AdapterResponse = await self.adapter.send_request(
+            adapter_response: AdapterResponse = await self.adapter.send_request(
                 adapter_request
             )
-            cleaned = adapter_resposne.response_text.strip()
+            cleaned = adapter_response.response_text.strip()
             if cleaned.startswith("```"):
                 cleaned = cleaned.split("\n", 1)[1].rsplit("\n", 1)[0]
 
