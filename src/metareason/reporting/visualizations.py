@@ -88,8 +88,8 @@ def plot_posterior_distribution(
     )
 
     ax.set_title(
-        f"We are {int(hdi_prob * 100)}% confident true {oracle_name} "
-        f"quality is between {hdi_lower:.2f} and {hdi_upper:.2f}"
+        f"Estimated True Quality ({oracle_name}): "
+        f"{int(hdi_prob * 100)}% HDI [{hdi_lower:.2f}, {hdi_upper:.2f}]"
     )
     ax.set_xlabel("Quality Score")
     ax.set_ylabel("Density")
@@ -246,7 +246,7 @@ def plot_oracle_variability(
         label=f"Mean: {mean_val:.2f}",
     )
 
-    ax.set_title(f"Oracle Measurement Noise: {oracle_name}")
+    ax.set_title(f"Judge Measurement Noise: {oracle_name}")
     ax.set_xlabel("Noise Magnitude")
     ax.set_ylabel("Density")
     ax.legend()

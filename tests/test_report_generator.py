@@ -1,8 +1,4 @@
-import matplotlib
-
-matplotlib.use("Agg")
-
-from metareason.config.models import (  # noqa: E402
+from metareason.config.models import (
     AdapterConfig,
     AxisConfig,
     OracleConfig,
@@ -10,9 +6,9 @@ from metareason.config.models import (  # noqa: E402
     SamplingConfig,
     SpecConfig,
 )
-from metareason.oracles.oracle_base import EvaluationResult  # noqa: E402
-from metareason.pipeline.runner import SampleResult  # noqa: E402
-from metareason.reporting.report_generator import ReportGenerator  # noqa: E402
+from metareason.oracles.oracle_base import EvaluationResult
+from metareason.pipeline.runner import SampleResult
+from metareason.reporting.report_generator import ReportGenerator
 
 
 def _make_fixtures():
@@ -100,6 +96,44 @@ class TestCollectData:
         assert data["hdi_pct"] == 94
         assert "test_oracle" in data["oracle_analyses"]
         assert "timestamp" in data
+        assert data["primary_model"] == "m"
+        assert len(data["pipeline_stages"]) == 1
+        assert data["pipeline_stages"][0]["model"] == "m"
+        assert "test_oracle" in data["oracle_configs"]
+
+
+class TestGenerateChartData:
+    def test_chart_data_structure(self):
+        results, spec, analysis_results = _make_fixtures()
+        gen = ReportGenerator(results, spec, analysis_results)
+        chart_data = gen._generate_chart_data()
+
+        assert "test_oracle" in chart_data
+        d = chart_data["test_oracle"]
+
+        assert "posterior_x" in d
+        assert "posterior_y" in d
+        assert len(d["posterior_x"]) == 80
+        assert len(d["posterior_y"]) == 80
+
+        assert d["histogram_labels"] == ["1", "2", "3", "4", "5"]
+        assert len(d["histogram_counts"]) == 5
+        assert sum(d["histogram_counts"]) == 3
+
+        assert "noise_x" in d
+        assert "noise_y" in d
+        assert len(d["noise_x"]) == 80
+
+        assert "hdi_lower" in d
+        assert "hdi_upper" in d
+        assert "population_mean" in d
+        assert "noise_mean" in d
+
+    def test_parameter_space_insufficient_axes(self):
+        results, spec, analysis_results = _make_fixtures()
+        gen = ReportGenerator(results, spec, analysis_results)
+        chart_data = gen._generate_chart_data()
+        assert chart_data["test_oracle"]["has_parameter_space"] is False
 
 
 class TestGenerateHtml:
@@ -115,14 +149,16 @@ class TestGenerateHtml:
         assert "test_spec" in html
         assert "test_oracle" in html
 
-    def test_generate_html_contains_images(self, tmp_path):
+    def test_generate_html_contains_chartjs(self, tmp_path):
         results, spec, analysis_results = _make_fixtures()
         gen = ReportGenerator(results, spec, analysis_results)
         output_path = tmp_path / "report.html"
         gen.generate_html(output_path)
 
         html = output_path.read_text()
-        assert "data:image/png;base64," in html
+        assert "chart.js" in html
+        assert "tailwindcss" in html
+        assert "chartData" in html
 
     def test_generate_html_contains_data_table(self, tmp_path):
         results, spec, analysis_results = _make_fixtures()
@@ -131,9 +167,9 @@ class TestGenerateHtml:
         gen.generate_html(output_path)
 
         html = output_path.read_text()
-        assert "<table>" in html
-        assert "tone=formal" in html
-        assert "complexity=5.00" in html
+        assert "Evaluation Data" in html
+        assert "tone: formal" in html
+        assert "complexity: 5.00" in html
 
     def test_generate_html_creates_parent_dirs(self, tmp_path):
         results, spec, analysis_results = _make_fixtures()
@@ -141,3 +177,14 @@ class TestGenerateHtml:
         output_path = tmp_path / "subdir" / "nested" / "report.html"
         result_path = gen.generate_html(output_path)
         assert result_path.exists()
+
+    def test_generate_html_contains_model_info(self, tmp_path):
+        results, spec, analysis_results = _make_fixtures()
+        gen = ReportGenerator(results, spec, analysis_results)
+        output_path = tmp_path / "report.html"
+        gen.generate_html(output_path)
+
+        html = output_path.read_text()
+        assert "Model Under Test" in html
+        assert "Oracle Judges" in html
+        assert "ollama" in html

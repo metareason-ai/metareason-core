@@ -1,86 +1,539 @@
-{% extends "base.html.j2" %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
 
-<h1>MetaReason Evaluation Report</h1>
-<div class="metadata">
-    Spec: {{ spec_id }} | Variants: {{ n_variants }} | Oracles: {{ n_oracles }} | Generated: {{ timestamp }}
-</div>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-{% for oracle_name, analysis in oracle_analyses.items() %}
-<div class="section">
-    <h2>{{ oracle_name }}</h2>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
 
-    <div class="finding">
-        We are {{ hdi_pct }}% confident the true {{ oracle_name }} quality is between
-        {{ analysis.hdi_lower | round(2) }} and {{ analysis.hdi_upper | round(2) }}
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0; }
+        .code-pill { font-family: 'Monaco', 'Consolas', monospace; font-size: 0.85em; background-color: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #475569; }
+        @media print {
+            body { background-color: white; }
+            .card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; margin-bottom: 20px; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased p-6 md:p-10 max-w-7xl mx-auto">
+
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+            <div class="text-xs font-bold tracking-wider text-indigo-600 uppercase mb-1">MetaReason Evaluation Report</div>
+            <h1 class="text-3xl font-bold text-slate-900">{{ spec_id }}</h1>
+            <p class="text-slate-500 text-sm mt-1">Generated: {{ timestamp }}</p>
+        </div>
+        <div class="flex gap-3">
+            <div class="flex flex-col items-end px-4 py-2 bg-white rounded-lg border border-slate-200">
+                <span class="text-xs text-slate-500 uppercase font-semibold">Variants</span>
+                <span class="font-bold text-lg">{{ n_variants }}</span>
+            </div>
+            <div class="flex flex-col items-end px-4 py-2 bg-white rounded-lg border border-slate-200">
+                <span class="text-xs text-slate-500 uppercase font-semibold">Oracles</span>
+                <span class="font-bold text-lg">{{ n_oracles }}</span>
+            </div>
+            <button onclick="window.print()" class="no-print px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition font-medium text-sm">
+                Print Report
+            </button>
+        </div>
+    </header>
+
+    <!-- Configuration Grid -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <!-- Model Under Test -->
+        <div class="card p-6">
+            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                Model Under Test
+            </h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-slate-500 bg-slate-50 uppercase border-b">
+                        <tr>
+                            <th class="px-3 py-2">Stage</th>
+                            <th class="px-3 py-2">Model</th>
+                            <th class="px-3 py-2">Adapter</th>
+                            <th class="px-3 py-2">Temp</th>
+                            <th class="px-3 py-2">Top-P</th>
+                            <th class="px-3 py-2">Max Tok</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stage in pipeline_stages %}
+                        <tr>
+                            <td class="px-3 py-3 font-mono text-slate-400">{{ loop.index }}</td>
+                            <td class="px-3 py-3 font-medium text-indigo-700">{{ stage.model }}</td>
+                            <td class="px-3 py-3">{{ stage.adapter }}</td>
+                            <td class="px-3 py-3">{{ stage.temperature }}</td>
+                            <td class="px-3 py-3">{{ stage.top_p }}</td>
+                            <td class="px-3 py-3">{{ stage.max_tokens }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Oracle Judges -->
+        <div class="card p-6">
+            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Oracle Judges
+            </h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-slate-500 bg-slate-50 uppercase border-b">
+                        <tr>
+                            <th class="px-3 py-2">Oracle Name</th>
+                            <th class="px-3 py-2">Type</th>
+                            <th class="px-3 py-2">Model</th>
+                            <th class="px-3 py-2">Adapter</th>
+                            <th class="px-3 py-2">Temp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for name, cfg in oracle_configs.items() %}
+                        <tr>
+                            <td class="px-3 py-3 font-medium">{{ name }}</td>
+                            <td class="px-3 py-3"><span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">{{ cfg.type }}</span></td>
+                            <td class="px-3 py-3">{{ cfg.model }}</td>
+                            <td class="px-3 py-3">{{ cfg.adapter }}</td>
+                            <td class="px-3 py-3">{{ cfg.temperature }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    {% for oracle_name, analysis in oracle_analyses.items() %}
+    <!-- Confidence Assessment: {{ oracle_name }} -->
+    <div class="bg-gradient-to-r from-indigo-600 to-blue-500 rounded-xl p-6 md:p-8 text-white shadow-lg mb-8">
+        <h2 class="text-xl md:text-2xl font-bold mb-2">Confidence Assessment</h2>
+        <p class="text-indigo-100 text-lg opacity-90">
+            We are <span class="font-bold text-white bg-white/20 px-1 rounded">{{ hdi_pct }}% confident</span>
+            the true {{ oracle_name }} score of
+            <span class="font-mono text-sm bg-white/10 px-1 rounded">{{ primary_model }}</span> outputs is between
+            <strong>{{ analysis.hdi_lower | round(2) }}</strong> and <strong>{{ analysis.hdi_upper | round(2) }}</strong>.
+        </p>
     </div>
 
-    <div class="stat-grid">
-        <div class="stat-card">
-            <div class="stat-value">{{ analysis.population_mean | round(3) }}</div>
-            <div class="stat-label">Mean</div>
+    <!-- Metrics Row -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="card p-5 border-l-4 border-l-blue-500">
+            <div class="text-slate-500 text-xs uppercase font-semibold mb-1">Mean Score</div>
+            <div class="text-3xl font-bold text-slate-800">{{ analysis.population_mean | round(3) }}</div>
+            <div class="text-xs text-slate-400 mt-1">Model Output</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ analysis.population_median | round(3) }}</div>
-            <div class="stat-label">Median</div>
+        <div class="card p-5 border-l-4 border-l-indigo-500">
+            <div class="text-slate-500 text-xs uppercase font-semibold mb-1">Median Score</div>
+            <div class="text-3xl font-bold text-slate-800">{{ analysis.population_median | round(3) }}</div>
+            <div class="text-xs text-slate-400 mt-1">Model Output</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ analysis.hdi_lower | round(3) }} - {{ analysis.hdi_upper | round(3) }}</div>
-            <div class="stat-label">{{ hdi_pct }}% HDI</div>
+        <div class="card p-5 border-l-4 border-l-purple-500">
+            <div class="text-slate-500 text-xs uppercase font-semibold mb-1">{{ hdi_pct }}% HDI</div>
+            <div class="text-2xl font-bold text-slate-800">{{ analysis.hdi_lower | round(2) }} &ndash; {{ analysis.hdi_upper | round(2) }}</div>
+            <div class="text-xs text-slate-400 mt-1">Highest Density Interval</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-value">{{ analysis.oracle_noise_mean | round(3) }}</div>
-            <div class="stat-label">Oracle Noise</div>
+        <div class="card p-5 border-l-4 border-l-slate-400 bg-slate-50">
+            <div class="text-slate-500 text-xs uppercase font-semibold mb-1">Judge Noise</div>
+            <div class="text-3xl font-bold text-slate-800">{{ analysis.oracle_noise_mean | round(2) }}</div>
+            <div class="text-xs text-slate-400 mt-1">{{ oracle_configs[oracle_name].model }}</div>
         </div>
-    </div>
+    </section>
 
-    {% if figures[oracle_name] %}
-    <h3>Posterior Distribution</h3>
-    <img src="data:image/png;base64,{{ figures[oracle_name].posterior }}" alt="Posterior distribution">
+    <!-- Charts Grid -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Posterior Distribution -->
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-700">Estimated True Quality</h3>
+                <span class="text-xs font-mono bg-blue-50 text-blue-600 px-2 py-1 rounded">Bayesian Posterior</span>
+            </div>
+            <div class="relative h-64 w-full">
+                <canvas id="posteriorChart-{{ oracle_name }}"></canvas>
+            </div>
+            <div class="mt-4 text-center text-xs text-slate-500">
+                The shaded area represents the {{ hdi_pct }}% High Density Interval [{{ analysis.hdi_lower | round(2) }}, {{ analysis.hdi_upper | round(2) }}].
+            </div>
+        </div>
 
-    <h3>Score Distribution</h3>
-    <img src="data:image/png;base64,{{ figures[oracle_name].scores }}" alt="Score distribution">
+        <!-- Score Distribution -->
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-700">Observed Score Distribution</h3>
+                <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">n={{ n_variants }}</span>
+            </div>
+            <div class="relative h-64 w-full">
+                <canvas id="histogramChart-{{ oracle_name }}"></canvas>
+            </div>
+            <div class="mt-4 text-center text-xs text-slate-500">
+                Frequency of scores assigned by {{ oracle_name }}.
+            </div>
+        </div>
 
-    <h3>Oracle Variability</h3>
-    <img src="data:image/png;base64,{{ figures[oracle_name].variability }}" alt="Oracle variability">
+        <!-- Judge Noise -->
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-700">Judge Measurement Noise</h3>
+                <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">{{ oracle_configs[oracle_name].model }}</span>
+            </div>
+            <div class="relative h-64 w-full">
+                <canvas id="noiseChart-{{ oracle_name }}"></canvas>
+            </div>
+            <div class="mt-4 text-center text-xs text-slate-500">
+                Estimated measurement uncertainty of the oracle judge.
+            </div>
+        </div>
 
-    {% if figures[oracle_name].parameter_space %}
-    <h3>Parameter Space Coverage</h3>
-    <img src="data:image/png;base64,{{ figures[oracle_name].parameter_space }}" alt="Parameter space">
-    {% endif %}
+        <!-- Parameter Space -->
+        <div class="card p-6 flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-700">Parameter Space Coverage</h3>
+            </div>
+            {% if chart_data[oracle_name].has_parameter_space %}
+            <div class="relative h-64 w-full">
+                <canvas id="paramChart-{{ oracle_name }}"></canvas>
+            </div>
+            {% else %}
+            <div class="flex-grow flex flex-col items-center justify-center bg-amber-50 rounded-lg border border-amber-100 p-8 text-center h-64">
+                <svg class="w-10 h-10 text-amber-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <p class="font-medium text-amber-800">Insufficient Data for Visualization</p>
+                <p class="text-sm text-amber-600 mt-1">Requires at least 2 continuous axes for parameter space plot.</p>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+    {% endfor %}
 
-    {% if figures[oracle_name].convergence %}
-    <h3>Convergence Diagnostics</h3>
-    <img src="data:image/png;base64,{{ figures[oracle_name].convergence }}" alt="Convergence diagnostics">
-    {% endif %}
-    {% endif %}
-</div>
-{% endfor %}
+    <!-- Evaluation Data Table -->
+    <section class="card overflow-hidden mb-8">
+        <div class="bg-slate-50 border-b px-6 py-4 flex justify-between items-center">
+            <h3 class="font-bold text-slate-700">Evaluation Data</h3>
+            <span class="text-xs text-slate-500">{{ n_variants }} Records</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-white text-slate-500 border-b">
+                    <tr>
+                        <th class="px-6 py-3 w-16 text-center">#</th>
+                        <th class="px-6 py-3">Parameters</th>
+                        {% for oracle_name in oracle_analyses.keys() %}
+                        <th class="px-6 py-3 w-32 text-center">{{ oracle_name }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for result in results %}
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="px-6 py-4 text-center font-mono text-slate-400">{{ loop.index }}</td>
+                        <td class="px-6 py-4">
+                            {% for k, v in result.sample_params.items() %}
+                            <span class="code-pill{% if not loop.first %} ml-2{% endif %}">{{ k }}: {{ v if v is string else "%.2f"|format(v) }}</span>
+                            {% endfor %}
+                        </td>
+                        {% for oracle_name in oracle_analyses.keys() %}
+                        {% set score = result.evaluations[oracle_name].score %}
+                        <td class="px-6 py-4 text-center font-bold {% if score >= 4.5 %}text-indigo-700 bg-indigo-50 rounded{% else %}text-slate-700{% endif %}">{{ score | round(1) }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
 
-<div class="section">
-    <h2>Evaluation Data</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Parameters</th>
-                {% for oracle_name in oracle_analyses.keys() %}
-                <th>{{ oracle_name }}</th>
-                {% endfor %}
-            </tr>
-        </thead>
-        <tbody>
-            {% for result in results %}
-            <tr>
-                <td>{{ loop.index }}</td>
-                <td>{% for k, v in result.sample_params.items() %}{{ k }}={{ v if v is string else "%.2f"|format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
-                {% for oracle_name in oracle_analyses.keys() %}
-                <td>{{ result.evaluations[oracle_name].score | round(2) }}</td>
-                {% endfor %}
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+    <footer class="mt-12 text-center text-xs text-slate-400 pb-8">
+        MetaReason Report Generator &middot; {{ timestamp[:4] }}
+    </footer>
 
-{% endblock %}
+    <!-- Chart.js Configuration -->
+    <script>
+    (function() {
+        const chartData = {{ chart_data | tojson }};
+
+        const commonScatterOpts = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: {
+                    type: 'linear',
+                    grid: { display: false },
+                    ticks: { callback: v => v.toFixed(1) }
+                },
+                y: {
+                    grid: { color: '#f1f5f9' },
+                    beginAtZero: true,
+                    ticks: { display: false }
+                }
+            }
+        };
+
+        Object.keys(chartData).forEach(function(oracleName) {
+            const d = chartData[oracleName];
+
+            // --- Posterior Distribution ---
+            const posteriorPoints = d.posterior_x.map((x, i) => ({x: x, y: d.posterior_y[i]}));
+            new Chart(document.getElementById('posteriorChart-' + oracleName), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        data: posteriorPoints,
+                        showLine: true,
+                        borderColor: '#4f46e5',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    ...commonScatterOpts,
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: {
+                                hdiBox: {
+                                    type: 'box',
+                                    xMin: d.hdi_lower,
+                                    xMax: d.hdi_upper,
+                                    backgroundColor: 'rgba(79, 70, 229, 0.12)',
+                                    borderWidth: 0
+                                },
+                                meanLine: {
+                                    type: 'line',
+                                    xMin: d.population_mean,
+                                    xMax: d.population_mean,
+                                    borderColor: '#ef4444',
+                                    borderWidth: 1.5,
+                                    borderDash: [5, 5],
+                                    label: {
+                                        display: true,
+                                        content: 'Mean: ' + d.population_mean.toFixed(2),
+                                        position: 'start',
+                                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                                        font: { size: 10 }
+                                    }
+                                },
+                                medianLine: {
+                                    type: 'line',
+                                    xMin: d.population_median,
+                                    xMax: d.population_median,
+                                    borderColor: '#f59e0b',
+                                    borderWidth: 1.5,
+                                    borderDash: [5, 5],
+                                    label: {
+                                        display: true,
+                                        content: 'Median: ' + d.population_median.toFixed(2),
+                                        position: 'end',
+                                        backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                                        font: { size: 10 }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            grid: { display: false },
+                            title: { display: true, text: 'Quality Score', font: { size: 12 } },
+                            ticks: { callback: v => v.toFixed(1) }
+                        },
+                        y: {
+                            grid: { color: '#f1f5f9' },
+                            beginAtZero: true,
+                            title: { display: true, text: 'Density', font: { size: 12 } },
+                            ticks: { display: false }
+                        }
+                    }
+                }
+            });
+
+            // --- Score Histogram ---
+            new Chart(document.getElementById('histogramChart-' + oracleName), {
+                type: 'bar',
+                data: {
+                    labels: d.histogram_labels,
+                    datasets: [{
+                        data: d.histogram_counts,
+                        backgroundColor: '#94a3b8',
+                        hoverBackgroundColor: '#4f46e5',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: {
+                                meanLine: {
+                                    type: 'line',
+                                    xMin: d.score_mean - 1,
+                                    xMax: d.score_mean - 1,
+                                    borderColor: '#ef4444',
+                                    borderWidth: 2,
+                                    borderDash: [5, 5],
+                                    label: {
+                                        display: true,
+                                        content: 'Mean: ' + d.score_mean.toFixed(2),
+                                        position: 'start',
+                                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                                        font: { size: 10 }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            title: { display: true, text: 'Score', font: { size: 12 } }
+                        },
+                        y: {
+                            grid: { color: '#f1f5f9' },
+                            beginAtZero: true,
+                            title: { display: true, text: 'Count', font: { size: 12 } },
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+
+            // --- Noise Distribution ---
+            const noisePoints = d.noise_x.map((x, i) => ({x: x, y: d.noise_y[i]}));
+            new Chart(document.getElementById('noiseChart-' + oracleName), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        data: noisePoints,
+                        showLine: true,
+                        borderColor: '#64748b',
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    ...commonScatterOpts,
+                    plugins: {
+                        legend: { display: false },
+                        annotation: {
+                            annotations: {
+                                hdiBox: {
+                                    type: 'box',
+                                    xMin: d.noise_hdi_lower,
+                                    xMax: d.noise_hdi_upper,
+                                    backgroundColor: 'rgba(100, 116, 139, 0.12)',
+                                    borderWidth: 0
+                                },
+                                meanLine: {
+                                    type: 'line',
+                                    xMin: d.noise_mean,
+                                    xMax: d.noise_mean,
+                                    borderColor: '#ef4444',
+                                    borderWidth: 1.5,
+                                    borderDash: [5, 5],
+                                    label: {
+                                        display: true,
+                                        content: 'Mean: ' + d.noise_mean.toFixed(2),
+                                        position: 'start',
+                                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                                        font: { size: 10 }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            grid: { display: false },
+                            title: { display: true, text: 'Noise Magnitude', font: { size: 12 } },
+                            ticks: { callback: v => v.toFixed(2) }
+                        },
+                        y: {
+                            grid: { color: '#f1f5f9' },
+                            beginAtZero: true,
+                            title: { display: true, text: 'Density', font: { size: 12 } },
+                            ticks: { display: false }
+                        }
+                    }
+                }
+            });
+
+            // --- Parameter Space (if available) ---
+            if (d.has_parameter_space && d.parameter_pairs && d.parameter_pairs.length > 0) {
+                const pair = d.parameter_pairs[0];
+                const scores = pair.points.map(p => p.score);
+                const minScore = Math.min(...scores);
+                const maxScore = Math.max(...scores);
+                const range = maxScore - minScore || 1;
+
+                const bgColors = pair.points.map(p => {
+                    const t = (p.score - minScore) / range;
+                    const r = Math.round(79 + (16 - 79) * t);
+                    const g = Math.round(70 + (185 - 70) * t);
+                    const b = Math.round(229 + (129 - 229) * t);
+                    return 'rgb(' + r + ',' + g + ',' + b + ')';
+                });
+
+                new Chart(document.getElementById('paramChart-' + oracleName), {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            data: pair.points.map(p => ({x: p.x, y: p.y})),
+                            backgroundColor: bgColors,
+                            borderColor: '#1e293b',
+                            borderWidth: 1,
+                            pointRadius: 8,
+                            pointHoverRadius: 10
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                grid: { display: false },
+                                title: { display: true, text: pair.x_label, font: { size: 12 } }
+                            },
+                            y: {
+                                grid: { color: '#f1f5f9' },
+                                title: { display: true, text: pair.y_label, font: { size: 12 } }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    })();
+    </script>
+</body>
+</html>
