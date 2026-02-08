@@ -1,3 +1,3 @@
-from .models import AxisConfig, OracleConfig, SpecConfig
+from .models import AxisConfig, CalibrateConfig, OracleConfig, SpecConfig
 
-__all__ = ["SpecConfig", "AxisConfig", "OracleConfig"]
+__all__ = ["SpecConfig", "CalibrateConfig", "AxisConfig", "OracleConfig"]

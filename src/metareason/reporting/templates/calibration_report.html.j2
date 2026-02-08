@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0; }
+        .code-pill { font-family: 'Monaco', 'Consolas', monospace; font-size: 0.85em; background-color: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #475569; }
+        @media print {
+            body { background-color: white; }
+            .card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; margin-bottom: 20px; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased p-6 md:p-10 max-w-7xl mx-auto">
+
+    <!-- Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+        <div>
+            <div class="text-xs font-bold tracking-wider text-indigo-600 uppercase mb-1">MetaReason Calibration Report</div>
+            <h1 class="text-3xl font-bold text-slate-900">{{ spec_id }}</h1>
+            <p class="text-slate-500 text-sm mt-1">Generated: {{ timestamp }}</p>
+        </div>
+        <div class="flex gap-3">
+            <div class="flex flex-col items-end px-4 py-2 bg-white rounded-lg border border-slate-200">
+                <span class="text-xs text-slate-500 uppercase font-semibold">Repeats</span>
+                <span class="font-bold text-lg">{{ repeats }}</span>
+            </div>
+            <button onclick="window.print()" class="no-print px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition font-medium text-sm">
+                Print Report
+            </button>
+        </div>
+    </header>
+
+    <!-- Configuration Grid -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <!-- Oracle Config -->
+        <div class="card p-6">
+            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Oracle Judge
+            </h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-slate-500 bg-slate-50 uppercase border-b">
+                        <tr>
+                            <th class="px-3 py-2">Model</th>
+                            <th class="px-3 py-2">Adapter</th>
+                            <th class="px-3 py-2">Temperature</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="px-3 py-3 font-medium text-indigo-700">{{ oracle_model }}</td>
+                            <td class="px-3 py-3">{{ oracle_adapter }}</td>
+                            <td class="px-3 py-3">{{ oracle_temperature }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% if oracle_rubric %}
+            <div class="mt-4">
+                <div class="text-xs text-slate-500 uppercase font-semibold mb-1">Rubric</div>
+                <pre class="text-xs text-slate-600 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap max-h-32 overflow-y-auto">{{ oracle_rubric }}</pre>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Prompt / Response -->
+        <div class="card p-6">
+            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                Fixed Prompt &amp; Response
+            </h3>
+            <div class="mb-3">
+                <div class="text-xs text-slate-500 uppercase font-semibold mb-1">Prompt</div>
+                <pre class="text-xs text-slate-600 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap max-h-24 overflow-y-auto">{{ prompt }}</pre>
+            </div>
+            <div>
+                <div class="text-xs text-slate-500 uppercase font-semibold mb-1">Response</div>
+                <pre class="text-xs text-slate-600 bg-slate-50 rounded-lg p-3 whitespace-pre-wrap max-h-24 overflow-y-auto">{{ response }}</pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Confidence Assessment -->
+    <div class="bg-gradient-to-r from-indigo-600 to-blue-500 rounded-xl p-6 md:p-8 text-white shadow-lg mb-8">
+        <h2 class="text-xl md:text-2xl font-bold mb-2">Confidence Assessment</h2>
+        <p class="text-indigo-100 text-lg opacity-90">
+            We are <span class="font-bold text-white bg-white/20 px-1 rounded">{{ hdi_pct }}% confident</span>
+            the true score is between
+            <strong>{{ analysis.hdi_lower | round(2) }}</strong> and <strong>{{ analysis.hdi_upper | round(2) }}</strong>.
+        </p>
+    </div>
+
+    <!-- Metrics Row -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="card p-5 border-l-4 border-l-blue-500">
+            <div class="text-slate-500 text-xs uppercase font-semibold mb-1">Mean Score</div>
+            <div class="text-3xl font-bold text-slate-800">{{ analysis.population_mean | round(3) }}</div>
+            <div class="text-xs text-slate-400 mt-1">Across {{ repeats }} repeats</div>
+        </div>
+        <div class="card p-5 border-l-4 border-l-indigo-500">
+            <div class="text-slate-500 text-xs uppercase font-semibold mb-1">Median Score</div>
+            <div class="text-3xl font-bold text-slate-800">{{ analysis.population_median | round(3) }}</div>
+            <div class="text-xs text-slate-400 mt-1">Across {{ repeats }} repeats</div>
+        </div>
+        <div class="card p-5 border-l-4 border-l-purple-500">
+            <div class="text-slate-500 text-xs uppercase font-semibold mb-1">{{ hdi_pct }}% HDI</div>
+            <div class="text-2xl font-bold text-slate-800">{{ analysis.hdi_lower | round(2) }} &ndash; {{ analysis.hdi_upper | round(2) }}</div>
+            <div class="text-xs text-slate-400 mt-1">Highest Density Interval</div>
+        </div>
+        <div class="card p-5 border-l-4 border-l-slate-400 bg-slate-50">
+            <div class="text-slate-500 text-xs uppercase font-semibold mb-1">Judge Noise</div>
+            <div class="text-3xl font-bold text-slate-800">{{ analysis.oracle_noise_mean | round(2) }}</div>
+            <div class="text-xs text-slate-400 mt-1">{{ oracle_model }}</div>
+        </div>
+    </section>
+
+    {% if has_expected %}
+    <!-- Bias Analysis -->
+    <section class="card p-6 mb-8 border-l-4 {% if within_hdi %}border-l-green-500{% else %}border-l-amber-500{% endif %}">
+        <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+            Bias Analysis (vs Expected Score {{ expected_score }})
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <div class="text-xs text-slate-500 uppercase font-semibold mb-1">Expected Score</div>
+                <div class="text-2xl font-bold text-slate-800">{{ expected_score }}</div>
+            </div>
+            <div>
+                <div class="text-xs text-slate-500 uppercase font-semibold mb-1">Measured Bias</div>
+                <div class="text-2xl font-bold {% if bias > 0 %}text-amber-600{% elif bias < 0 %}text-blue-600{% else %}text-green-600{% endif %}">
+                    {{ "%+.2f"|format(bias) }}
+                </div>
+                <div class="text-xs text-slate-400 mt-1">
+                    Judge scores {% if bias > 0 %}higher{% elif bias < 0 %}lower{% else %}equal{% endif %} than ground truth
+                </div>
+            </div>
+            <div>
+                <div class="text-xs text-slate-500 uppercase font-semibold mb-1">Expected Within HDI</div>
+                <div class="text-2xl font-bold {% if within_hdi %}text-green-600{% else %}text-amber-600{% endif %}">
+                    {% if within_hdi %}Yes{% else %}No{% endif %}
+                </div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Charts Grid -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Posterior Distribution -->
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-700">Estimated True Score</h3>
+                <span class="text-xs font-mono bg-blue-50 text-blue-600 px-2 py-1 rounded">Bayesian Posterior</span>
+            </div>
+            <div class="relative h-64 w-full">
+                <canvas id="posteriorChart"></canvas>
+            </div>
+            <div class="mt-4 text-center text-xs text-slate-500">
+                The shaded area represents the {{ hdi_pct }}% High Density Interval [{{ analysis.hdi_lower | round(2) }}, {{ analysis.hdi_upper | round(2) }}].
+            </div>
+        </div>
+
+        <!-- Score Distribution -->
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-700">Observed Score Distribution</h3>
+                <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">n={{ repeats }}</span>
+            </div>
+            <div class="relative h-64 w-full">
+                <canvas id="histogramChart"></canvas>
+            </div>
+            <div class="mt-4 text-center text-xs text-slate-500">
+                Frequency of scores across {{ repeats }} repeated evaluations.
+            </div>
+        </div>
+
+        <!-- Judge Noise -->
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-700">Judge Measurement Noise</h3>
+                <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">{{ oracle_model }}</span>
+            </div>
+            <div class="relative h-64 w-full">
+                <canvas id="noiseChart"></canvas>
+            </div>
+            <div class="mt-4 text-center text-xs text-slate-500">
+                Estimated measurement uncertainty of the oracle judge.
+            </div>
+        </div>
+    </section>
+
+    <!-- Raw Scores Table -->
+    <section class="card overflow-hidden mb-8">
+        <div class="bg-slate-50 border-b px-6 py-4 flex justify-between items-center">
+            <h3 class="font-bold text-slate-700">Raw Scores</h3>
+            <span class="text-xs text-slate-500">{{ scores | length }} Evaluations</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-white text-slate-500 border-b">
+                    <tr>
+                        <th class="px-6 py-3 w-16 text-center">#</th>
+                        <th class="px-6 py-3 w-32 text-center">Score</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for score in scores %}
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="px-6 py-4 text-center font-mono text-slate-400">{{ loop.index }}</td>
+                        <td class="px-6 py-4 text-center font-bold {% if score >= 4.5 %}text-indigo-700 bg-indigo-50 rounded{% else %}text-slate-700{% endif %}">{{ score | round(1) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <footer class="mt-12 text-center text-xs text-slate-400 pb-8">
+        MetaReason Calibration Report &middot; {{ timestamp[:4] }}
+    </footer>
+
+    <!-- Chart.js Configuration -->
+    <script>
+    (function() {
+        const d = {{ chart_data | tojson }};
+
+        const commonScatterOpts = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: {
+                    type: 'linear',
+                    grid: { display: false },
+                    ticks: { callback: v => v.toFixed(1) }
+                },
+                y: {
+                    grid: { color: '#f1f5f9' },
+                    beginAtZero: true,
+                    ticks: { display: false }
+                }
+            }
+        };
+
+        // --- Posterior Distribution ---
+        const posteriorPoints = d.posterior_x.map((x, i) => ({x: x, y: d.posterior_y[i]}));
+        new Chart(document.getElementById('posteriorChart'), {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    data: posteriorPoints,
+                    showLine: true,
+                    borderColor: '#4f46e5',
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                ...commonScatterOpts,
+                plugins: {
+                    legend: { display: false },
+                    annotation: {
+                        annotations: {
+                            hdiBox: {
+                                type: 'box',
+                                xMin: d.hdi_lower,
+                                xMax: d.hdi_upper,
+                                backgroundColor: 'rgba(79, 70, 229, 0.12)',
+                                borderWidth: 0
+                            },
+                            meanLine: {
+                                type: 'line',
+                                xMin: d.population_mean,
+                                xMax: d.population_mean,
+                                borderColor: '#ef4444',
+                                borderWidth: 1.5,
+                                borderDash: [5, 5],
+                                label: {
+                                    display: true,
+                                    content: 'Mean: ' + d.population_mean.toFixed(2),
+                                    position: 'start',
+                                    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                                    font: { size: 10 }
+                                }
+                            },
+                            medianLine: {
+                                type: 'line',
+                                xMin: d.population_median,
+                                xMax: d.population_median,
+                                borderColor: '#f59e0b',
+                                borderWidth: 1.5,
+                                borderDash: [5, 5],
+                                label: {
+                                    display: true,
+                                    content: 'Median: ' + d.population_median.toFixed(2),
+                                    position: 'end',
+                                    backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                                    font: { size: 10 }
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        grid: { display: false },
+                        title: { display: true, text: 'Quality Score', font: { size: 12 } },
+                        ticks: { callback: v => v.toFixed(1) }
+                    },
+                    y: {
+                        grid: { color: '#f1f5f9' },
+                        beginAtZero: true,
+                        title: { display: true, text: 'Density', font: { size: 12 } },
+                        ticks: { display: false }
+                    }
+                }
+            }
+        });
+
+        // --- Score Histogram ---
+        new Chart(document.getElementById('histogramChart'), {
+            type: 'bar',
+            data: {
+                labels: d.histogram_labels,
+                datasets: [{
+                    data: d.histogram_counts,
+                    backgroundColor: '#94a3b8',
+                    hoverBackgroundColor: '#4f46e5',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    annotation: {
+                        annotations: {
+                            meanLine: {
+                                type: 'line',
+                                xMin: d.score_mean - 1,
+                                xMax: d.score_mean - 1,
+                                borderColor: '#ef4444',
+                                borderWidth: 2,
+                                borderDash: [5, 5],
+                                label: {
+                                    display: true,
+                                    content: 'Mean: ' + d.score_mean.toFixed(2),
+                                    position: 'start',
+                                    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                                    font: { size: 10 }
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        title: { display: true, text: 'Score', font: { size: 12 } }
+                    },
+                    y: {
+                        grid: { color: '#f1f5f9' },
+                        beginAtZero: true,
+                        title: { display: true, text: 'Count', font: { size: 12 } },
+                        ticks: { stepSize: 1 }
+                    }
+                }
+            }
+        });
+
+        // --- Noise Distribution ---
+        const noisePoints = d.noise_x.map((x, i) => ({x: x, y: d.noise_y[i]}));
+        new Chart(document.getElementById('noiseChart'), {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    data: noisePoints,
+                    showLine: true,
+                    borderColor: '#64748b',
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                ...commonScatterOpts,
+                plugins: {
+                    legend: { display: false },
+                    annotation: {
+                        annotations: {
+                            hdiBox: {
+                                type: 'box',
+                                xMin: d.noise_hdi_lower,
+                                xMax: d.noise_hdi_upper,
+                                backgroundColor: 'rgba(100, 116, 139, 0.12)',
+                                borderWidth: 0
+                            },
+                            meanLine: {
+                                type: 'line',
+                                xMin: d.noise_mean,
+                                xMax: d.noise_mean,
+                                borderColor: '#ef4444',
+                                borderWidth: 1.5,
+                                borderDash: [5, 5],
+                                label: {
+                                    display: true,
+                                    content: 'Mean: ' + d.noise_mean.toFixed(2),
+                                    position: 'start',
+                                    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                                    font: { size: 10 }
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        grid: { display: false },
+                        title: { display: true, text: 'Noise Magnitude', font: { size: 12 } },
+                        ticks: { callback: v => v.toFixed(2) }
+                    },
+                    y: {
+                        grid: { color: '#f1f5f9' },
+                        beginAtZero: true,
+                        title: { display: true, text: 'Density', font: { size: 12 } },
+                        ticks: { display: false }
+                    }
+                }
+            }
+        });
+    })();
+    </script>
+</body>
+</html>

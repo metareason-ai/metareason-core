@@ -69,6 +69,7 @@ def mock_population_quality():
     return {
         "population_mean": 4.0,
         "population_median": 4.1,
+        "population_std": 0.3,
         "hdi_lower": 3.5,
         "hdi_upper": 4.5,
         "hdi_prob": 0.94,
@@ -431,4 +432,271 @@ class TestReportCommand:
         )
 
         # Click's exists=True validation catches missing file
+        assert result.exit_code != 0
+
+
+# --- calibrate command ---
+
+VALID_CALIBRATE_YAML = """\
+spec_id: "cal-test"
+type: calibrate
+prompt: "Test prompt"
+response: "Test response"
+repeats: 5
+oracle:
+  type: "llm_judge"
+  model: "test-model"
+  adapter:
+    name: "ollama"
+  rubric: "Rate 1-5"
+analysis:
+  hdi_probability: 0.94
+  mcmc_draws: 200
+  mcmc_chains: 2
+  mcmc_tune: 100
+"""
+
+VALID_CALIBRATE_WITH_EXPECTED_YAML = """\
+spec_id: "cal-expected"
+type: calibrate
+prompt: "Test prompt"
+response: "Test response"
+expected_score: 4.0
+repeats: 5
+oracle:
+  type: "llm_judge"
+  model: "test-model"
+  adapter:
+    name: "ollama"
+  rubric: "Rate 1-5"
+analysis:
+  hdi_probability: 0.94
+  mcmc_draws: 200
+  mcmc_chains: 2
+  mcmc_tune: 100
+"""
+
+
+class TestCalibrateCommand:
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_basic(
+        self, mock_judge_class, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "cal.yaml"
+        spec_file.write_text(VALID_CALIBRATE_YAML)
+
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(
+            return_value=EvaluationResult(score=4.0, explanation="good")
+        )
+        mock_judge_class.return_value = mock_judge
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = cli_runner.invoke(metareason, ["calibrate", str(spec_file)])
+
+        assert result.exit_code == 0
+        assert "Judge Calibration" in result.output
+        assert "confident" in result.output
+        assert mock_judge.evaluate.call_count == 5
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_with_expected_score(
+        self, mock_judge_class, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "cal.yaml"
+        spec_file.write_text(VALID_CALIBRATE_WITH_EXPECTED_YAML)
+
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(
+            return_value=EvaluationResult(score=4.0, explanation="good")
+        )
+        mock_judge_class.return_value = mock_judge
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = cli_runner.invoke(metareason, ["calibrate", str(spec_file)])
+
+        assert result.exit_code == 0
+        assert "Accuracy" in result.output
+        assert "Bias" in result.output
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_with_output(
+        self, mock_judge_class, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "cal.yaml"
+        spec_file.write_text(VALID_CALIBRATE_YAML)
+        output_file = tmp_path / "cal_results.json"
+
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(
+            return_value=EvaluationResult(score=4.0, explanation="good")
+        )
+        mock_judge_class.return_value = mock_judge
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = cli_runner.invoke(
+            metareason, ["calibrate", str(spec_file), "-o", str(output_file)]
+        )
+
+        assert result.exit_code == 0
+        assert output_file.exists()
+
+        data = json.loads(output_file.read_text())
+        assert data["spec_id"] == "cal-test"
+        assert data["repeats"] == 5
+        assert len(data["scores"]) == 5
+        assert "analysis" in data
+
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_all_evaluations_fail(
+        self, mock_judge_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "cal.yaml"
+        spec_file.write_text(VALID_CALIBRATE_YAML)
+
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(side_effect=RuntimeError("LLM unavailable"))
+        mock_judge_class.return_value = mock_judge
+
+        result = cli_runner.invoke(metareason, ["calibrate", str(spec_file)])
+
+        assert result.exit_code == 0  # graceful exit, not a crash
+        assert "All evaluations failed" in result.output
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_partial_failures(
+        self, mock_judge_class, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "cal.yaml"
+        spec_file.write_text(VALID_CALIBRATE_YAML)
+
+        mock_judge = MagicMock()
+        # 3 successes, 2 failures out of 5 repeats
+        mock_judge.evaluate = AsyncMock(
+            side_effect=[
+                EvaluationResult(score=4.0, explanation="good"),
+                RuntimeError("timeout"),
+                EvaluationResult(score=3.5, explanation="ok"),
+                EvaluationResult(score=4.5, explanation="great"),
+                RuntimeError("timeout"),
+            ]
+        )
+        mock_judge_class.return_value = mock_judge
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = cli_runner.invoke(metareason, ["calibrate", str(spec_file)])
+
+        assert result.exit_code == 0
+        assert "3/5 evaluations" in result.output
+        assert "2 failed" in result.output
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_with_report(
+        self, mock_judge_class, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "cal.yaml"
+        spec_file.write_text(VALID_CALIBRATE_YAML)
+
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(
+            return_value=EvaluationResult(score=4.0, explanation="good")
+        )
+        mock_judge_class.return_value = mock_judge
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        with patch(
+            "metareason.reporting.CalibrationReportGenerator"
+        ) as mock_report_gen:
+            mock_generator = MagicMock()
+            mock_report_gen.return_value = mock_generator
+
+            result = cli_runner.invoke(
+                metareason, ["calibrate", str(spec_file), "--report"]
+            )
+
+            assert result.exit_code == 0
+            assert "HTML report saved" in result.output
+            mock_report_gen.assert_called_once()
+            mock_generator.generate_html.assert_called_once()
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_with_report_and_output(
+        self, mock_judge_class, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "cal.yaml"
+        spec_file.write_text(VALID_CALIBRATE_YAML)
+        output_file = tmp_path / "cal_results.json"
+
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(
+            return_value=EvaluationResult(score=4.0, explanation="good")
+        )
+        mock_judge_class.return_value = mock_judge
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        with patch(
+            "metareason.reporting.CalibrationReportGenerator"
+        ) as mock_report_gen:
+            mock_generator = MagicMock()
+            mock_report_gen.return_value = mock_generator
+
+            result = cli_runner.invoke(
+                metareason,
+                [
+                    "calibrate",
+                    str(spec_file),
+                    "-o",
+                    str(output_file),
+                    "--report",
+                ],
+            )
+
+            assert result.exit_code == 0
+            assert "HTML report saved" in result.output
+            # Report path should derive from output path
+            call_args = mock_generator.generate_html.call_args[0]
+            assert str(call_args[0]).endswith(".html")
+
+    def test_calibrate_invalid_spec(self, cli_runner, tmp_path):
+        spec_file = tmp_path / "bad_cal.yaml"
+        spec_file.write_text("spec_id: bad\ntype: calibrate\n")
+
+        result = cli_runner.invoke(metareason, ["calibrate", str(spec_file)])
+
         assert result.exit_code != 0

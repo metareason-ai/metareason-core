@@ -1,0 +1,29 @@
+spec_id: ambiguous_calibration_v1
+type: calibrate
+prompt: "Write a haiku about artificial intelligence."
+response: |
+  Silicon minds think
+  Patterns in the data flow
+  Almost like dreaming
+expected_score: 3.5
+repeats: 15
+oracle:
+  type: llm_judge
+  model: gemma3:27b
+  adapter:
+    name: ollama
+  temperature: 1
+  rubric: |
+    Evaluate this haiku on a 1-5 scale considering:
+    - Does it follow the 5-7-5 syllable structure?
+    - Is the imagery evocative and original?
+    - Does it meaningfully engage with the AI theme?
+    - Is there depth or a surprising turn?
+    A 3 means competent but unremarkable. A 5 means genuinely memorable.
+    Be very discriminating - most haiku are 2-3 range.
+    Return JSON: {"score": X, "explanation": "..."}
+analysis:
+  hdi_probability: 0.94
+  mcmc_draws: 1000
+  mcmc_chains: 4
+  mcmc_tune: 500

@@ -1,0 +1,23 @@
+spec_id: judge_calibration_v1
+type: calibrate
+prompt: "Explain the concept of quantum entanglement to a college student."
+response: |
+  Quantum entanglement is a phenomenon in quantum physics where two particles
+  become connected in such a way that measuring one instantly affects the other,
+  regardless of distance. Think of it like having two magic coins - when you
+  flip one and it lands heads, the other will always land tails, no matter how
+  far apart they are. Einstein famously called this "spooky action at a distance."
+expected_score: 4
+repeats: 30
+oracle:
+  type: llm_judge
+  model: gemma3:27b
+  adapter:
+    name: ollama
+  rubric: |
+    Evaluate the coherence and clarity of the response on a 1-5 scale.
+    Return: {"score": X, "explanation": "..."}
+analysis:
+  hdi_probability: 0.94
+  mcmc_draws: 2000
+  mcmc_chains: 4

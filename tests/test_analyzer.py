@@ -91,6 +91,7 @@ class TestBayesianAnalyzerSampling:
         expected_keys = {
             "population_mean",
             "population_median",
+            "population_std",
             "hdi_lower",
             "hdi_upper",
             "hdi_prob",

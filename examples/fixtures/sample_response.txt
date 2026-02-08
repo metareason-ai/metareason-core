@@ -1,0 +1,5 @@
+Quantum entanglement is a phenomenon in quantum physics where two particles
+become connected in such a way that measuring one instantly affects the other,
+regardless of distance. Think of it like having two magic coins - when you
+flip one and it lands heads, the other will always land tails, no matter how
+far apart they are. Einstein famously called this "spooky action at a distance."
