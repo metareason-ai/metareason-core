@@ -1,0 +1,31 @@
+spec_id: variance_calibration_v1
+type: calibrate
+prompt: "Explain the difference between supervised and unsupervised learning."
+response: |
+  Supervised learning uses labeled data where inputs are paired with known outputs,
+  and the model learns to map inputs to outputs. Common examples include
+  classification and regression. Unsupervised learning works with unlabeled data
+  and tries to find hidden patterns or structure, like clustering similar items
+  together. The key difference is that supervised needs a "teacher" (labels) while
+  unsupervised discovers patterns on its own.
+expected_score: 4
+repeats: 10
+oracle:
+  type: llm_judge
+  model: gemma3:27b
+  adapter:
+    name: ollama
+  temperature: 1
+  rubric: |
+    Evaluate this ML explanation on a 1-5 scale considering:
+    - Technical accuracy of the definitions
+    - Completeness (are key aspects covered?)
+    - Use of concrete examples
+    - Clarity for a beginner audience
+    Be critical - a perfect 5 requires exceptional depth and precision.
+    Return JSON: {"score": X, "explanation": "..."}
+analysis:
+  hdi_probability: 0.94
+  mcmc_draws: 1000
+  mcmc_chains: 4
+  mcmc_tune: 500

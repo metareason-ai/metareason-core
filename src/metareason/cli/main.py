@@ -20,7 +20,10 @@ from rich.table import Table
 
 from ..analysis.analyzer import BayesianAnalyzer
 from ..config import SpecConfig
+from ..oracles.llm_judge import LLMJudge
+from ..oracles.oracle_base import EvaluationContext
 from ..pipeline import load_spec, runner
+from ..pipeline.loader import load_calibrate_spec
 from ..pipeline.runner import SampleResult
 
 load_dotenv()
@@ -609,6 +612,212 @@ def report(results_json, spec, output):
         console.print(f"[red]Error: Invalid JSON in results file - {e}[/red]")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
+        raise
+
+
+def display_calibration_results(result: dict, oracle_name: str, calibrate_config):
+    """Display calibration-specific results with HDI and optional bias analysis."""
+    hdi_prob_pct = int(result["hdi_prob"] * 100)
+
+    console.print(f"\n[bold magenta]Judge Calibration: {oracle_name}[/bold magenta]\n")
+
+    console.print(
+        f"[bold green]We are {hdi_prob_pct}% confident the true score "
+        f"is between {result['hdi_lower']:.2f} and {result['hdi_upper']:.2f}[/bold green]\n"
+    )
+
+    console.print("[cyan]Score Statistics:[/cyan]")
+    console.print(f"  Mean: {result['population_mean']:.2f}")
+    console.print(f"  Median: {result['population_median']:.2f}")
+    console.print(f"  Std Dev: {result['population_std']:.2f}")
+    console.print(
+        f"  {hdi_prob_pct}% HDI: [{result['hdi_lower']:.2f}, {result['hdi_upper']:.2f}]"
+    )
+
+    noise_hdi_lower, noise_hdi_upper = result["oracle_noise_hdi"]
+    console.print("\n[cyan]Judge Consistency:[/cyan]")
+    console.print(
+        f"  Measurement noise: {result['oracle_noise_mean']:.2f} "
+        f"({hdi_prob_pct}% HDI: [{noise_hdi_lower:.2f}, {noise_hdi_upper:.2f}])"
+    )
+    console.print(f"  Based on {result['n_samples']} repeated evaluations")
+
+    if calibrate_config.expected_score is not None:
+        expected = calibrate_config.expected_score
+        bias = result["population_mean"] - expected
+        within_hdi = result["hdi_lower"] <= expected <= result["hdi_upper"]
+
+        console.print(f"\n[cyan]Accuracy (vs expected score of {expected:.1f}):[/cyan]")
+        direction = "higher" if bias > 0 else "lower"
+        console.print(
+            f"  Bias: {bias:+.2f} (judge scores {direction} than ground truth)"
+        )
+        console.print(f"  Expected score within HDI: {'Yes' if within_hdi else 'No'}")
+
+
+@metareason.command()
+@click.argument("spec")
+@click.option("--output", "-o", help="Output file for results (JSON format)")
+@click.option(
+    "--report",
+    is_flag=True,
+    help="Generate HTML report",
+)
+def calibrate(spec, output, report):
+    """Calibrate an LLM judge by measuring scoring consistency and reliability."""
+    try:
+        spec_path = Path(spec)
+        calibrate_config = load_calibrate_spec(spec_path)
+
+        console.print(
+            f"[bold blue]Calibrating judge with spec:[/bold blue] {spec_path}"
+        )
+        console.print(
+            f"[dim]Running {calibrate_config.repeats} repeated evaluations...[/dim]\n"
+        )
+
+        # Initialize the judge oracle
+        judge = LLMJudge(calibrate_config.oracle)
+
+        # Create evaluation context from fixed prompt+response
+        eval_context = EvaluationContext(
+            prompt=calibrate_config.prompt,
+            response=calibrate_config.response,
+        )
+
+        # Run repeated evaluations
+        failures = 0
+
+        async def run_evaluations():
+            nonlocal failures
+            results = []
+            for _ in range(calibrate_config.repeats):
+                try:
+                    result = await judge.evaluate(eval_context)
+                    results.append(result)
+                except Exception as eval_err:
+                    failures += 1
+                    console.print(
+                        f"[yellow]Evaluation {len(results) + failures} failed: "
+                        f"{eval_err}[/yellow]"
+                    )
+            return results
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task(
+                f"[cyan]Evaluating ({calibrate_config.repeats} repeats)...",
+                total=None,
+            )
+            eval_results = asyncio.run(run_evaluations())
+            progress.update(task, completed=True)
+
+        if not eval_results:
+            console.print(
+                "[bold red]Error: All evaluations failed. "
+                "Cannot perform analysis.[/bold red]"
+            )
+            return
+
+        succeeded = len(eval_results)
+        total = succeeded + failures
+        if failures > 0:
+            console.print(
+                f"\n[bold yellow]Completed {succeeded}/{total} evaluations "
+                f"({failures} failed)[/bold yellow]\n"
+            )
+        else:
+            console.print(
+                f"\n[bold green]Completed {succeeded} evaluations[/bold green]\n"
+            )
+
+        # Display raw scores
+        scores = [r.score for r in eval_results]
+        console.print(f"[dim]Raw scores: {', '.join(f'{s:.1f}' for s in scores)}[/dim]")
+
+        # Create synthetic SampleResult objects for the analyzer
+        oracle_name = calibrate_config.oracle.model
+        sample_results = [
+            SampleResult(
+                sample_params={},
+                original_prompt=calibrate_config.prompt,
+                final_response=calibrate_config.response,
+                evaluations={oracle_name: eval_result},
+            )
+            for eval_result in eval_results
+        ]
+
+        # Run Bayesian analysis
+        console.print("\n[bold blue]Running Bayesian Analysis...[/bold blue]\n")
+
+        analysis_config = calibrate_config.analysis
+        analyzer = BayesianAnalyzer(sample_results, analysis_config=analysis_config)
+
+        hdi_prob = analysis_config.hdi_probability if analysis_config else 0.94
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        ) as progress:
+            analysis_task = progress.add_task("[cyan]MCMC sampling...", total=None)
+            pop_result = analyzer.estimate_population_quality(
+                oracle_name, hdi_prob=hdi_prob
+            )
+            progress.update(analysis_task, completed=True)
+
+        # Display calibration results
+        display_calibration_results(pop_result, oracle_name, calibrate_config)
+
+        # Save results if output specified
+        if output:
+            output_path = Path(output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            results_data = {
+                "spec_id": calibrate_config.spec_id,
+                "oracle": oracle_name,
+                "repeats": calibrate_config.repeats,
+                "scores": scores,
+                "analysis": pop_result,
+            }
+            if calibrate_config.expected_score is not None:
+                results_data["expected_score"] = calibrate_config.expected_score
+                results_data["bias"] = (
+                    pop_result["population_mean"] - calibrate_config.expected_score
+                )
+
+            with open(output_path, "w") as f:
+                json.dump(results_data, f, indent=2)
+            console.print(f"\n[green]Results saved to {output_path}[/green]")
+
+        # Generate HTML report if requested
+        if report:
+            from ..reporting import CalibrationReportGenerator
+
+            generator = CalibrationReportGenerator(calibrate_config, scores, pop_result)
+
+            if output:
+                report_path = Path(output).with_suffix(".html")
+            else:
+                reports_dir = Path("reports")
+                reports_dir.mkdir(exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                spec_name = Path(spec).stem
+                report_path = reports_dir / f"{spec_name}_{timestamp}_report.html"
+
+            generator.generate_html(report_path)
+            console.print(f"[green]✓ HTML report saved to {report_path}[/green]")
+
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
         raise
 
 

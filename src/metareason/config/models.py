@@ -259,3 +259,31 @@ class SpecConfig(BaseModel):
     oracles: Dict[str, OracleConfig] = Field(..., min_length=1)
     axes: List[AxisConfig] = []
     analysis: Optional[BayesianAnalysisConfig] = None
+
+
+class CalibrateConfig(BaseModel):
+    """Configuration for LLM judge calibration.
+
+    Measures judge reliability by repeatedly evaluating a fixed prompt+response
+    pair, then running Bayesian analysis to produce credible intervals on the
+    judge's scoring distribution.
+
+    Attributes:
+        spec_id: Unique identifier for this calibration spec.
+        type: Must be "calibrate".
+        prompt: Fixed prompt to judge (or "file:path" to load from file).
+        response: Fixed response to judge (or "file:path" to load from file).
+        expected_score: Optional ground truth score for bias measurement.
+        repeats: Number of repeated judgments to perform.
+        oracle: Single oracle configuration to calibrate.
+        analysis: Optional Bayesian analysis configuration.
+    """
+
+    spec_id: str
+    type: Literal["calibrate"] = "calibrate"
+    prompt: str
+    response: str
+    expected_score: Optional[float] = Field(default=None, ge=1.0, le=5.0)
+    repeats: int = Field(default=30, ge=1)
+    oracle: OracleConfig
+    analysis: Optional[BayesianAnalysisConfig] = None

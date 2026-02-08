@@ -1,0 +1,13 @@
+spec_id: judge_calibration_files_v1
+type: calibrate
+prompt: "file:fixtures/sample_prompt.txt"
+response: "file:fixtures/sample_response.txt"
+repeats: 30
+oracle:
+  type: llm_judge
+  model: gemma3:27b
+  adapter:
+    name: ollama
+  rubric: |
+    Evaluate the coherence and clarity of the response on a 1-5 scale.
+    Return: {"score": X, "explanation": "..."}

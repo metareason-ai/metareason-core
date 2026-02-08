@@ -1,0 +1,28 @@
+spec_id: quick_calibration_v1
+type: calibrate
+prompt: "Explain why the sky is blue in two sentences."
+response: |
+  The sky appears blue because molecules in Earth's atmosphere scatter shorter
+  wavelengths of sunlight (blue and violet) more than longer wavelengths like
+  red and orange. Since our eyes are more sensitive to blue light and violet
+  light is largely absorbed higher in the atmosphere, we perceive the sky as blue.
+expected_score: 5
+repeats: 10
+oracle:
+  type: llm_judge
+  model: gemma3:27b
+  adapter:
+    name: ollama
+  rubric: |
+    Evaluate the scientific accuracy and clarity of the response on a 1-5 scale:
+    1 = Completely wrong or incoherent
+    2 = Major errors or very unclear
+    3 = Partially correct but significant gaps
+    4 = Mostly correct and clear
+    5 = Scientifically accurate and clearly explained
+    Return JSON: {"score": X, "explanation": "..."}
+analysis:
+  hdi_probability: 0.94
+  mcmc_draws: 1000
+  mcmc_chains: 2
+  mcmc_tune: 500

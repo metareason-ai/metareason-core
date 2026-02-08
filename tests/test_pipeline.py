@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from metareason.adapters.adapter_base import AdapterResponse
 from metareason.config.models import AdapterConfig, PipelineConfig
 from metareason.oracles.oracle_base import EvaluationResult
-from metareason.pipeline.loader import load_spec
+from metareason.pipeline.loader import load_calibrate_spec, load_spec
 from metareason.pipeline.renderer import TemplateRenderer
 from metareason.pipeline.runner import SampleResult, _process_sample
 
@@ -84,6 +84,137 @@ oracles: {}
         )
         with pytest.raises(ValidationError):
             load_spec(spec_yaml)
+
+
+# --- load_calibrate_spec ---
+
+
+class TestLoadCalibrateSpec:
+    def test_load_calibrate_spec_valid(self, tmp_path):
+        spec_yaml = tmp_path / "cal.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: cal-test
+type: calibrate
+prompt: "Test prompt"
+response: "Test response"
+repeats: 10
+oracle:
+  type: llm_judge
+  model: test-model
+  adapter:
+    name: ollama
+  rubric: "Score 1-5"
+"""
+        )
+        cfg = load_calibrate_spec(spec_yaml)
+        assert cfg.spec_id == "cal-test"
+        assert cfg.prompt == "Test prompt"
+        assert cfg.response == "Test response"
+        assert cfg.repeats == 10
+
+    def test_load_calibrate_spec_with_file_references(self, tmp_path):
+        # Create fixture files
+        prompt_file = tmp_path / "prompt.txt"
+        prompt_file.write_text("My test prompt from file")
+        response_file = tmp_path / "response.txt"
+        response_file.write_text("My test response from file")
+
+        spec_yaml = tmp_path / "cal.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: cal-files
+type: calibrate
+prompt: "file:prompt.txt"
+response: "file:response.txt"
+oracle:
+  type: llm_judge
+  model: test-model
+  adapter:
+    name: ollama
+  rubric: "Score 1-5"
+"""
+        )
+        cfg = load_calibrate_spec(spec_yaml)
+        assert cfg.prompt == "My test prompt from file"
+        assert cfg.response == "My test response from file"
+
+    def test_load_calibrate_spec_file_not_found(self, tmp_path):
+        spec_yaml = tmp_path / "cal.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: cal-missing
+type: calibrate
+prompt: "file:nonexistent.txt"
+response: "inline response"
+oracle:
+  type: llm_judge
+  model: test-model
+  adapter:
+    name: ollama
+  rubric: "Score 1-5"
+"""
+        )
+        with pytest.raises(FileNotFoundError):
+            load_calibrate_spec(spec_yaml)
+
+    def test_load_calibrate_spec_inline_strings(self, tmp_path):
+        spec_yaml = tmp_path / "cal.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: cal-inline
+type: calibrate
+prompt: "Just a regular prompt"
+response: "Just a regular response"
+oracle:
+  type: llm_judge
+  model: test-model
+  adapter:
+    name: ollama
+  rubric: "Score 1-5"
+"""
+        )
+        cfg = load_calibrate_spec(spec_yaml)
+        assert cfg.prompt == "Just a regular prompt"
+        assert cfg.response == "Just a regular response"
+
+    def test_load_calibrate_spec_rejects_relative_traversal(self, tmp_path):
+        spec_yaml = tmp_path / "cal.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: cal-traversal
+type: calibrate
+prompt: "file:../../etc/passwd"
+response: "inline response"
+oracle:
+  type: llm_judge
+  model: test-model
+  adapter:
+    name: ollama
+  rubric: "Score 1-5"
+"""
+        )
+        with pytest.raises(ValueError, match="resolves outside"):
+            load_calibrate_spec(spec_yaml)
+
+    def test_load_calibrate_spec_rejects_absolute_path(self, tmp_path):
+        spec_yaml = tmp_path / "cal.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: cal-absolute
+type: calibrate
+prompt: "file:/etc/passwd"
+response: "inline response"
+oracle:
+  type: llm_judge
+  model: test-model
+  adapter:
+    name: ollama
+  rubric: "Score 1-5"
+"""
+        )
+        with pytest.raises(ValueError, match="resolves outside"):
+            load_calibrate_spec(spec_yaml)
 
 
 # --- _process_sample ---

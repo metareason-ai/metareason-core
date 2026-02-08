@@ -5,6 +5,7 @@ from metareason.config.models import (
     AdapterConfig,
     AxisConfig,
     BayesianAnalysisConfig,
+    CalibrateConfig,
     OracleConfig,
     PipelineConfig,
     SamplingConfig,
@@ -281,3 +282,82 @@ class TestSpecConfig:
         )
         assert len(spec.axes) == 1
         assert spec.analysis.mcmc_draws == 500
+
+
+# --- CalibrateConfig ---
+
+
+class TestCalibrateConfig:
+    def test_valid_calibrate_config(self):
+        cfg = CalibrateConfig(
+            spec_id="cal-1",
+            prompt="Test prompt",
+            response="Test response",
+            oracle=make_oracle(),
+        )
+        assert cfg.spec_id == "cal-1"
+        assert cfg.type == "calibrate"
+        assert cfg.prompt == "Test prompt"
+        assert cfg.response == "Test response"
+
+    def test_calibrate_config_defaults(self):
+        cfg = CalibrateConfig(
+            spec_id="cal",
+            prompt="p",
+            response="r",
+            oracle=make_oracle(),
+        )
+        assert cfg.repeats == 30
+        assert cfg.type == "calibrate"
+        assert cfg.expected_score is None
+        assert cfg.analysis is None
+
+    def test_calibrate_config_expected_score_bounds(self):
+        cfg = CalibrateConfig(
+            spec_id="cal",
+            prompt="p",
+            response="r",
+            expected_score=4.0,
+            oracle=make_oracle(),
+        )
+        assert cfg.expected_score == 4.0
+
+        with pytest.raises(ValidationError):
+            CalibrateConfig(
+                spec_id="cal",
+                prompt="p",
+                response="r",
+                expected_score=0.5,
+                oracle=make_oracle(),
+            )
+
+        with pytest.raises(ValidationError):
+            CalibrateConfig(
+                spec_id="cal",
+                prompt="p",
+                response="r",
+                expected_score=5.5,
+                oracle=make_oracle(),
+            )
+
+    def test_calibrate_config_requires_oracle(self):
+        with pytest.raises(ValidationError):
+            CalibrateConfig(
+                spec_id="cal",
+                prompt="p",
+                response="r",
+            )
+
+    def test_calibrate_config_optional_fields(self):
+        cfg = CalibrateConfig(
+            spec_id="cal",
+            prompt="p",
+            response="r",
+            oracle=make_oracle(),
+            expected_score=3.5,
+            repeats=50,
+            analysis=BayesianAnalysisConfig(mcmc_draws=500),
+        )
+        assert cfg.expected_score == 3.5
+        assert cfg.repeats == 50
+        assert cfg.analysis.mcmc_draws == 500

@@ -1,3 +1,4 @@
+from .calibration_report import CalibrationReportGenerator
 from .report_generator import ReportGenerator
 from .visualizations import (
     figure_to_base64,
@@ -9,6 +10,7 @@ from .visualizations import (
 )
 
 __all__ = [
+    "CalibrationReportGenerator",
     "ReportGenerator",
     "figure_to_base64",
     "plot_convergence_diagnostics",

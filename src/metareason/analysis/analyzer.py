@@ -4,7 +4,7 @@ import arviz as az
 import numpy as np
 import pymc as pm
 
-from metareason.config.models import BayesianAnalysisConfig, SpecConfig
+from metareason.config.models import BayesianAnalysisConfig
 from metareason.pipeline.runner import SampleResult
 
 
@@ -21,20 +21,28 @@ class BayesianAnalyzer:
         analysis_config: Bayesian analysis configuration (uses defaults if not specified).
     """
 
-    def __init__(self, results: List[SampleResult], spec_config: SpecConfig):
+    def __init__(
+        self, results: List[SampleResult], spec_config=None, analysis_config=None
+    ):
         """Initialize the Bayesian analyzer.
 
         Args:
             results: List of SampleResult objects from the evaluation pipeline.
             spec_config: Specification configuration that may include analysis parameters.
                 If spec_config.analysis is None, default parameters are used.
+            analysis_config: Direct BayesianAnalysisConfig to use. Takes precedence
+                over spec_config.analysis if both are provided.
         """
         self.results = results
         self.spec_config = spec_config
         self.n_variants = len(results)
 
-        # Use provided analysis config or defaults
-        self.analysis_config = spec_config.analysis or BayesianAnalysisConfig()
+        if analysis_config:
+            self.analysis_config = analysis_config
+        elif spec_config:
+            self.analysis_config = spec_config.analysis or BayesianAnalysisConfig()
+        else:
+            self.analysis_config = BayesianAnalysisConfig()
 
     def fit_calibration_model(self, oracle_name: str) -> az.InferenceData:
         """Estimate true quality for each variant using a Bayesian calibration model.
@@ -165,6 +173,7 @@ class BayesianAnalyzer:
         return {
             "population_mean": float(quality_samples.mean()),
             "population_median": float(np.median(quality_samples)),
+            "population_std": float(quality_samples.std()),
             "hdi_lower": float(quality_hdi["overall_quality"].values[0]),
             "hdi_upper": float(quality_hdi["overall_quality"].values[1]),
             "hdi_prob": hdi_prob,
