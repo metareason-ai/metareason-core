@@ -100,8 +100,9 @@ class LhsSampler:
         params = axis.params or {}
 
         if distribution == "uniform":
-            min_val = params.get("min", 0.0)
-            max_val = params.get("max", 1.0)
+            self._warn_duplicate_bound_keys(params, axis.name)
+            min_val = params.get("low", params.get("min", 0.0))
+            max_val = params.get("high", params.get("max", 1.0))
             return min_val + uniform_samples * (max_val - min_val)
 
         elif distribution == "normal":
@@ -112,8 +113,9 @@ class LhsSampler:
         elif distribution == "truncnorm":
             mu = params.get("mu", 0.0)
             sigma = params.get("sigma", 1.0)
-            min_val = params.get("min", -2.0)
-            max_val = params.get("max", 2.0)
+            self._warn_duplicate_bound_keys(params, axis.name)
+            min_val = params.get("low", params.get("min", -2.0))
+            max_val = params.get("high", params.get("max", 2.0))
 
             a = (min_val - mu) / sigma
             b = (max_val - mu) / sigma
@@ -128,6 +130,17 @@ class LhsSampler:
 
         else:
             raise ValueError(f"Unknown distribution: {distribution}")
+
+    @staticmethod
+    def _warn_duplicate_bound_keys(params: dict, axis_name: str) -> None:
+        if "low" in params and "min" in params:
+            logger.warning(
+                f"Axis '{axis_name}': both 'low' and 'min' provided; using 'low'"
+            )
+        if "high" in params and "max" in params:
+            logger.warning(
+                f"Axis '{axis_name}': both 'high' and 'max' provided; using 'high'"
+            )
 
     def _generate_categorical_samples(self, n_samples: int) -> np.ndarray:
         if not self.categorical_axes:

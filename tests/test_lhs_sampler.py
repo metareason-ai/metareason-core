@@ -189,3 +189,93 @@ def test_single_sample(continuous_axis):
 
     assert len(samples) == 1
     assert "continuous" in samples[0]
+
+
+def test_uniform_distribution_accepts_low_high():
+    """Test uniform distribution works with low/high params (scipy convention)."""
+    axis = AxisConfig(
+        name="detail_level",
+        type="continuous",
+        distribution="uniform",
+        params={"low": 1.0, "high": 10.0},
+    )
+    sampler = LhsSampler([axis], random_seed=42)
+    samples = sampler.generate_samples(100)
+
+    values = [s["detail_level"] for s in samples]
+    assert all(
+        1.0 <= v <= 10.0 for v in values
+    ), f"Values outside [1, 10]: min={min(values)}, max={max(values)}"
+    assert min(values) < 2.0  # Should get values near low bound
+    assert max(values) > 9.0  # Should get values near high bound
+
+
+def test_uniform_distribution_accepts_min_max():
+    """Test uniform distribution still works with min/max params (backward compat)."""
+    axis = AxisConfig(
+        name="detail_level",
+        type="continuous",
+        distribution="uniform",
+        params={"min": 5.0, "max": 15.0},
+    )
+    sampler = LhsSampler([axis], random_seed=42)
+    samples = sampler.generate_samples(100)
+
+    values = [s["detail_level"] for s in samples]
+    assert all(
+        5.0 <= v <= 15.0 for v in values
+    ), f"Values outside [5, 15]: min={min(values)}, max={max(values)}"
+
+
+def test_truncnorm_distribution_accepts_low_high():
+    """Test truncated normal works with low/high params (scipy convention)."""
+    axis = AxisConfig(
+        name="bounded_param",
+        type="continuous",
+        distribution="truncnorm",
+        params={"mu": 5.0, "sigma": 2.0, "low": 0.0, "high": 10.0},
+    )
+    sampler = LhsSampler([axis], random_seed=42)
+    samples = sampler.generate_samples(100)
+
+    values = [s["bounded_param"] for s in samples]
+    assert all(0.0 <= v <= 10.0 for v in values)
+
+
+def test_truncnorm_distribution_accepts_min_max():
+    """Test truncated normal still works with min/max params (backward compat)."""
+    axis = AxisConfig(
+        name="bounded_param",
+        type="continuous",
+        distribution="truncnorm",
+        params={"mu": 5.0, "sigma": 2.0, "min": 0.0, "max": 10.0},
+    )
+    sampler = LhsSampler([axis], random_seed=42)
+    samples = sampler.generate_samples(100)
+
+    values = [s["bounded_param"] for s in samples]
+    assert all(0.0 <= v <= 10.0 for v in values)
+
+
+def test_uniform_conflicting_keys_prefers_low_high(caplog):
+    """Test that low/high take precedence over min/max when both are provided."""
+    axis = AxisConfig(
+        name="conflict_param",
+        type="continuous",
+        distribution="uniform",
+        params={"low": 1.0, "high": 10.0, "min": 50.0, "max": 100.0},
+    )
+    sampler = LhsSampler([axis], random_seed=42)
+
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        samples = sampler.generate_samples(100)
+
+    # Should use low/high (1-10), not min/max (50-100)
+    values = [s["conflict_param"] for s in samples]
+    assert all(1.0 <= v <= 10.0 for v in values)
+
+    # Should have logged warnings
+    assert "both 'low' and 'min' provided" in caplog.text
+    assert "both 'high' and 'max' provided" in caplog.text
