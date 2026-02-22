@@ -8,6 +8,7 @@ from jinja2 import Environment, PackageLoader
 from scipy.stats import gaussian_kde
 
 from metareason.config.models import CalibrateConfig
+from metareason.reporting.report_generator import _load_vendor_asset
 
 
 class CalibrationReportGenerator:
@@ -143,4 +144,11 @@ class CalibrationReportGenerator:
     def _render_template(self, data: dict, chart_data: dict) -> str:
         """Render the Jinja2 template with data and chart data."""
         template = self.env.get_template("calibration_report.html.j2")
-        return template.render(chart_data=chart_data, **data)
+        return template.render(
+            chart_data=chart_data,
+            chartjs_source=_load_vendor_asset("chart.umd.min.js"),
+            chartjs_annotation_source=_load_vendor_asset(
+                "chartjs-plugin-annotation.min.js"
+            ),
+            **data,
+        )
