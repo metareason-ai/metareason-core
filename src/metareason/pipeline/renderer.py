@@ -9,7 +9,7 @@ class TemplateRenderer:
             trim_blocks=True,
             lstrip_blocks=True,
             keep_trailing_newline=False,
-            autoescape=True,
+            autoescape=False,  # nosec B701 - renders LLM prompts, not HTML
         )
 
     def render_request(self, template: str, variables: Dict[str, Any]) -> str:
