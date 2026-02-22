@@ -161,12 +161,12 @@ class TestOracleConfig:
         cfg = make_oracle()
         assert cfg.type == "llm_judge"
         assert cfg.max_tokens == 2000
-        assert cfg.temperature == 1
+        assert cfg.temperature == 1.0
 
     def test_defaults(self):
         cfg = make_oracle()
         assert cfg.max_tokens == 2000
-        assert cfg.temperature == 1
+        assert cfg.temperature == 1.0
 
     def test_rubric_optional(self):
         cfg = OracleConfig(
@@ -175,6 +175,24 @@ class TestOracleConfig:
             adapter=AdapterConfig(name="ollama"),
         )
         assert cfg.rubric is None
+
+    def test_float_temperature_preserved(self):
+        cfg = make_oracle(temperature=0.7)
+        assert cfg.temperature == pytest.approx(0.7)
+        assert isinstance(cfg.temperature, float)
+
+    def test_temperature_boundaries(self):
+        cfg_zero = make_oracle(temperature=0.0)
+        assert cfg_zero.temperature == pytest.approx(0.0)
+
+        cfg_max = make_oracle(temperature=2.0)
+        assert cfg_max.temperature == pytest.approx(2.0)
+
+    def test_temperature_out_of_range(self):
+        with pytest.raises(ValidationError):
+            make_oracle(temperature=-0.1)
+        with pytest.raises(ValidationError):
+            make_oracle(temperature=2.1)
 
     def test_invalid_type(self):
         with pytest.raises(ValidationError):
