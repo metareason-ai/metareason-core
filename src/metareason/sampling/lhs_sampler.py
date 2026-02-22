@@ -150,10 +150,21 @@ class LhsSampler:
 
         for axis in self.categorical_axes:
             values_list = list(axis.values)
-            base_count = n_samples // len(values_list)
-            remainder = n_samples % len(values_list)
-            categorical_samples = values_list * base_count + values_list[:remainder]
-            self.rng.shuffle(categorical_samples)
+
+            if axis.weights:
+                # Use weighted sampling when weights are provided
+                weights = np.array(axis.weights, dtype=float)
+                normalized_weights = weights / weights.sum()
+                categorical_samples = list(
+                    self.rng.choice(values_list, size=n_samples, p=normalized_weights)
+                )
+            else:
+                # Uniform distribution: balanced allocation with shuffle
+                base_count = n_samples // len(values_list)
+                remainder = n_samples % len(values_list)
+                categorical_samples = values_list * base_count + values_list[:remainder]
+                self.rng.shuffle(categorical_samples)
+
             all_columns.append(categorical_samples)
 
         return np.column_stack(all_columns)

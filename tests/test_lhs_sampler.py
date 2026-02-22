@@ -257,6 +257,52 @@ def test_truncnorm_distribution_accepts_min_max():
     assert all(0.0 <= v <= 10.0 for v in values)
 
 
+def test_categorical_weighted_sampling():
+    """Test that categorical axis with weights produces weighted distribution."""
+    axis = AxisConfig(
+        name="category",
+        type="categorical",
+        values=["rare", "common"],
+        weights=[0.1, 0.9],
+    )
+    sampler = LhsSampler([axis], random_seed=42)
+    samples = sampler.generate_samples(1000)
+
+    values = [s["category"] for s in samples]
+    common_count = values.count("common")
+    rare_count = values.count("rare")
+
+    # With weights [0.1, 0.9] and 1000 samples, "common" should appear
+    # significantly more than "rare". Allow generous tolerance for randomness.
+    assert common_count > rare_count, (
+        f"Expected 'common' to appear more than 'rare', "
+        f"got common={common_count}, rare={rare_count}"
+    )
+    # "common" should be at least 70% of samples (expected ~90%)
+    assert (
+        common_count >= 700
+    ), f"Expected 'common' >= 700 out of 1000, got {common_count}"
+
+
+def test_categorical_uniform_without_weights():
+    """Test that categorical axis without weights produces uniform distribution."""
+    axis = AxisConfig(
+        name="category",
+        type="categorical",
+        values=["a", "b"],
+    )
+    sampler = LhsSampler([axis], random_seed=42)
+    samples = sampler.generate_samples(1000)
+
+    values = [s["category"] for s in samples]
+    a_count = values.count("a")
+    b_count = values.count("b")
+
+    # Without weights, distribution should be exactly balanced (LHS balanced allocation)
+    assert a_count == 500, f"Expected 'a' count == 500, got {a_count}"
+    assert b_count == 500, f"Expected 'b' count == 500, got {b_count}"
+
+
 def test_uniform_conflicting_keys_prefers_low_high(caplog):
     """Test that low/high take precedence over min/max when both are provided."""
     axis = AxisConfig(
