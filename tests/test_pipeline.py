@@ -26,6 +26,17 @@ class TestTemplateRenderer:
         result = renderer.render_request(template, variables)
         assert result == "Hi, Alice! You are 30 years old."
 
+    def test_render_special_characters_not_escaped(self):
+        """Prompt templates should NOT HTML-escape special characters (issue #94)."""
+        renderer = TemplateRenderer()
+        result = renderer.render_request(
+            "Compare: {{ comparison }}", {"comparison": "5 > 3"}
+        )
+        assert result == "Compare: 5 > 3"
+        assert "&gt;" not in result
+        assert "&lt;" not in result
+        assert "&amp;" not in result
+
     def test_render_missing_variable(self):
         renderer = TemplateRenderer()
         result = renderer.render_request(
