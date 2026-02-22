@@ -54,24 +54,32 @@ async def run(spec_path: Path) -> List[SampleResult]:
 
     logger.info(f"Initialized {len(oracles)} oracle(s)")
 
+    # Pre-create adapters once per pipeline stage
+    adapters = [
+        get_adapter(pipe.adapter.name, **pipe.adapter.params)
+        for pipe in spec_config.pipeline
+    ]
+
     # Generate samples and process each one
     samples = LhsSampler(spec_config.axes).generate_samples(spec_config.n_variants)
     all_tasks = []
 
     for sample in samples:
-        task = _process_sample(spec_config.pipeline, sample, oracles)
+        task = _process_sample(spec_config.pipeline, sample, oracles, adapters=adapters)
         all_tasks.append(task)
 
     return await asyncio.gather(*all_tasks)
 
 
-async def _process_sample(pipeline, sample, oracles):
+async def _process_sample(pipeline, sample, oracles, *, adapters=None):
     """Process a single sample through the pipeline and evaluate with oracles.
 
     Args:
         pipeline: List of PipelineConfig stages to execute.
         sample: Parameter dictionary for this sample variant.
         oracles: Dictionary of oracle_name -> oracle instance for evaluation.
+        adapters: Optional list of pre-created adapter instances (one per stage).
+            If not provided, adapters are created on-the-fly per stage.
 
     Returns:
         SampleResult containing the prompt, response, and oracle evaluations.
@@ -79,6 +87,12 @@ async def _process_sample(pipeline, sample, oracles):
     renderer = TemplateRenderer()
     response = None
     original_prompt = None
+
+    # Create adapters on-the-fly if not provided (backward compatibility)
+    if adapters is None:
+        adapters = [
+            get_adapter(pipe.adapter.name, **pipe.adapter.params) for pipe in pipeline
+        ]
 
     # Execute pipeline stages
     for i, pipe in enumerate(pipeline):
@@ -90,7 +104,7 @@ async def _process_sample(pipeline, sample, oracles):
             # Subsequent stages: use previous response as input
             user_prompt = response
 
-        adapter = get_adapter(pipe.adapter.name, **pipe.adapter.params)
+        adapter = adapters[i]
         adapter_request = AdapterRequest(
             model=pipe.model,
             temperature=pipe.temperature,

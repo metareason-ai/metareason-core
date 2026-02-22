@@ -308,3 +308,56 @@ class TestProcessSample:
         assert len(calls) == 2
         second_call_request = calls[1].args[0]
         assert second_call_request.user_prompt == "stage 1 output"
+
+
+class TestAdapterReuse:
+    """Test that adapters are instantiated once per pipeline stage, not per sample."""
+
+    @patch("metareason.pipeline.runner.get_adapter")
+    @pytest.mark.asyncio
+    async def test_get_adapter_called_once_per_stage_not_per_sample(
+        self, mock_get_adapter
+    ):
+        """Verify get_adapter called once per stage, not per sample.
+
+        With 2 pipeline stages and 5 samples, get_adapter should be called
+        exactly 2 times (once per stage), not 10 times (once per sample per
+        stage). This mimics how run() pre-creates adapters and passes them
+        to _process_sample.
+        """
+        mock_adapter = AsyncMock()
+        mock_adapter.send_request.return_value = AdapterResponse(
+            response_text="response"
+        )
+        mock_get_adapter.return_value = mock_adapter
+
+        mock_oracle = AsyncMock()
+        mock_oracle.evaluate.return_value = EvaluationResult(
+            score=4.0, explanation="good"
+        )
+
+        pipeline = [
+            make_pipeline_config(template="Stage1: {{ name }}"),
+            make_pipeline_config(template="Stage2: ignored"),
+        ]
+        samples = [{"name": f"sample_{i}"} for i in range(5)]
+        oracles = {"test_oracle": mock_oracle}
+
+        # Pre-create adapters once per stage (as run() now does)
+        adapters = [
+            mock_get_adapter(pipe.adapter.name, **pipe.adapter.params)
+            for pipe in pipeline
+        ]
+
+        # Process all 5 samples through the 2-stage pipeline
+        import asyncio
+
+        tasks = [
+            _process_sample(pipeline, sample, oracles, adapters=adapters)
+            for sample in samples
+        ]
+        results = await asyncio.gather(*tasks)
+
+        assert len(results) == 5
+        # get_adapter should be called once per stage = 2, not 5*2 = 10
+        assert mock_get_adapter.call_count == 2
