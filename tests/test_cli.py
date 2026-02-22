@@ -3,8 +3,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
+from rich.console import Console
 
-from metareason.cli.main import metareason
+from metareason.cli.main import _run_bayesian_analysis, metareason
 from metareason.oracles.oracle_base import EvaluationResult
 from metareason.pipeline.runner import SampleResult
 
@@ -700,3 +701,125 @@ class TestCalibrateCommand:
         result = cli_runner.invoke(metareason, ["calibrate", str(spec_file)])
 
         assert result.exit_code != 0
+
+
+# --- _run_bayesian_analysis helper ---
+
+
+class TestRunBayesianAnalysis:
+    """Tests for the extracted _run_bayesian_analysis helper function."""
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    def test_returns_analysis_results_for_all_oracles(self, mock_analyzer_class):
+        import tempfile
+        from pathlib import Path
+
+        from metareason.pipeline.loader import load_spec as real_load_spec
+
+        with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
+            f.write(VALID_SPEC_YAML)
+            spec_path = Path(f.name)
+
+        spec_config = real_load_spec(spec_path)
+        results = [make_sample_result()]
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        test_console = Console(file=open("/dev/null", "w"))
+        analysis_results = _run_bayesian_analysis(spec_config, results, test_console)
+
+        assert isinstance(analysis_results, dict)
+        assert "coherence_judge" in analysis_results
+        assert analysis_results["coherence_judge"]["population_mean"] == 4.0
+        mock_analyzer.estimate_population_quality.assert_called_once_with(
+            "coherence_judge", hdi_prob=0.94
+        )
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    def test_handles_oracle_analysis_error_gracefully(self, mock_analyzer_class):
+        import tempfile
+        from pathlib import Path
+
+        from metareason.pipeline.loader import load_spec as real_load_spec
+
+        with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
+            f.write(VALID_SPEC_YAML)
+            spec_path = Path(f.name)
+
+        spec_config = real_load_spec(spec_path)
+        results = [make_sample_result()]
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.side_effect = RuntimeError(
+            "MCMC failed"
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        test_console = Console(file=open("/dev/null", "w"))
+        analysis_results = _run_bayesian_analysis(spec_config, results, test_console)
+
+        # Should return empty dict, not raise
+        assert isinstance(analysis_results, dict)
+        assert len(analysis_results) == 0
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    def test_uses_default_hdi_when_no_analysis_config(self, mock_analyzer_class):
+        import tempfile
+        from pathlib import Path
+
+        from metareason.pipeline.loader import load_spec as real_load_spec
+
+        # Spec without analysis section
+        spec_yaml = VALID_SPEC_YAML
+        with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
+            f.write(spec_yaml)
+            spec_path = Path(f.name)
+
+        spec_config = real_load_spec(spec_path)
+        # Ensure no analysis config
+        spec_config.analysis = None
+        results = [make_sample_result()]
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        test_console = Console(file=open("/dev/null", "w"))
+        _run_bayesian_analysis(spec_config, results, test_console)
+
+        mock_analyzer.estimate_population_quality.assert_called_once_with(
+            "coherence_judge", hdi_prob=0.94
+        )
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    def test_accepts_custom_oracle_names(self, mock_analyzer_class):
+        import tempfile
+        from pathlib import Path
+
+        from metareason.pipeline.loader import load_spec as real_load_spec
+
+        with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
+            f.write(VALID_SPEC_YAML)
+            spec_path = Path(f.name)
+
+        spec_config = real_load_spec(spec_path)
+        results = [make_sample_result()]
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        test_console = Console(file=open("/dev/null", "w"))
+        analysis_results = _run_bayesian_analysis(
+            spec_config, results, test_console, oracle_names=["coherence_judge"]
+        )
+
+        assert "coherence_judge" in analysis_results
