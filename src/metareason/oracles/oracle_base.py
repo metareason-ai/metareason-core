@@ -35,7 +35,7 @@ class OracleBase(ABC):
         self.config = config
 
     @abstractmethod
-    def evaluate(self, request: EvaluationContext) -> EvaluationResult:
+    async def evaluate(self, request: EvaluationContext) -> EvaluationResult:
         """Evaluate an LLM response.
 
         Args:

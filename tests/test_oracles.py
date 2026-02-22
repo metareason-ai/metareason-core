@@ -1,3 +1,4 @@
+import inspect
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -9,8 +10,15 @@ from metareason.oracles.llm_judge import LLMJudge
 from metareason.oracles.oracle_base import (
     EvaluationContext,
     EvaluationResult,
+    OracleBase,
     OracleException,
 )
+
+
+class TestOracleBaseContract:
+    def test_evaluate_is_coroutine_function(self):
+        """OracleBase.evaluate must be declared as an async method."""
+        assert inspect.iscoroutinefunction(OracleBase.evaluate)
 
 
 def make_oracle_config(**overrides):
