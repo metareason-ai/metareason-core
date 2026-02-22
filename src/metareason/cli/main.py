@@ -128,27 +128,38 @@ def display_population_quality(result: dict, oracle_name: str):
     console.print(f"[dim]Based on {result['n_samples']} evaluations[/dim]")
 
 
-def display_bayesian_analysis(idata: az.InferenceData, oracle_name: str, results: list):
+def display_bayesian_analysis(
+    idata: az.InferenceData, oracle_name: str, results: list, hdi_prob: float = 0.94
+):
     """Display Bayesian analysis results in the console.
 
     Args:
         idata: ArviZ InferenceData from Bayesian analysis.
         oracle_name: Name of the oracle that was analyzed.
         results: List of SampleResult objects.
+        hdi_prob: HDI probability used for the analysis (default 0.94).
     """
     console.print(f"\n[bold magenta]Bayesian Analysis: {oracle_name}[/bold magenta]\n")
 
+    # Compute HDI column names dynamically from the probability
+    alpha = (1 - hdi_prob) / 2
+    hdi_low_col = f"hdi_{alpha*100:.0f}%"
+    hdi_high_col = f"hdi_{(1-alpha)*100:.0f}%"
+    hdi_prob_pct = int(hdi_prob * 100)
+
     # Get summary statistics
-    summary = az.summary(idata, var_names=["true_quality", "oracle_noise"])
+    summary = az.summary(
+        idata, var_names=["true_quality", "oracle_noise"], hdi_prob=hdi_prob
+    )
 
     # Display oracle noise estimate
     noise_mean = summary.loc["oracle_noise", "mean"]
-    noise_hdi_low = summary.loc["oracle_noise", "hdi_3%"]
-    noise_hdi_high = summary.loc["oracle_noise", "hdi_97%"]
+    noise_hdi_low = summary.loc["oracle_noise", hdi_low_col]
+    noise_hdi_high = summary.loc["oracle_noise", hdi_high_col]
 
     console.print(
         f"[cyan]Oracle Measurement Error:[/cyan] "
-        f"{noise_mean:.3f} (95% CI: [{noise_hdi_low:.3f}, {noise_hdi_high:.3f}])\n"
+        f"{noise_mean:.3f} ({hdi_prob_pct}% CI: [{noise_hdi_low:.3f}, {noise_hdi_high:.3f}])\n"
     )
 
     # Create table for variant quality estimates
@@ -156,15 +167,17 @@ def display_bayesian_analysis(idata: az.InferenceData, oracle_name: str, results
     table.add_column("Variant", justify="center", style="cyan")
     table.add_column("Observed", justify="center", style="yellow")
     table.add_column("True Quality (Mean)", justify="center", style="green")
-    table.add_column("95% Credible Interval", justify="center", style="blue")
+    table.add_column(
+        f"{hdi_prob_pct}% Credible Interval", justify="center", style="blue"
+    )
 
     # Add rows for each variant
     for i in range(len(results)):
         var_name = f"true_quality[{i}]"
         if var_name in summary.index:
             mean = summary.loc[var_name, "mean"]
-            hdi_low = summary.loc[var_name, "hdi_3%"]
-            hdi_high = summary.loc[var_name, "hdi_97%"]
+            hdi_low = summary.loc[var_name, hdi_low_col]
+            hdi_high = summary.loc[var_name, hdi_high_col]
             observed = results[i].evaluations[oracle_name].score
 
             table.add_row(

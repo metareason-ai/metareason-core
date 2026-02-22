@@ -1,11 +1,16 @@
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pandas as pd
 import pytest
 from click.testing import CliRunner
 from rich.console import Console
 
-from metareason.cli.main import _run_bayesian_analysis, metareason
+from metareason.cli.main import (
+    _run_bayesian_analysis,
+    display_bayesian_analysis,
+    metareason,
+)
 from metareason.oracles.oracle_base import EvaluationResult
 from metareason.pipeline.runner import SampleResult
 
@@ -823,3 +828,68 @@ class TestRunBayesianAnalysis:
         )
 
         assert "coherence_judge" in analysis_results
+
+
+# --- display_bayesian_analysis with non-default HDI ---
+
+
+class TestDisplayBayesianAnalysis:
+    def _make_summary_df(self, hdi_low_col, hdi_high_col):
+        """Build a mock ArviZ summary DataFrame with given HDI column names."""
+        index = ["oracle_noise", "true_quality[0]"]
+        data = {
+            "mean": [0.3, 4.0],
+            "sd": [0.1, 0.2],
+            hdi_low_col: [0.1, 3.5],
+            hdi_high_col: [0.5, 4.5],
+            "r_hat": [1.0, 1.0],
+            "ess_bulk": [1000.0, 1000.0],
+            "ess_tail": [900.0, 900.0],
+        }
+        return pd.DataFrame(data, index=index)
+
+    def _make_results(self):
+        return [
+            SampleResult(
+                sample_params={"tone": "formal"},
+                original_prompt="test",
+                final_response="test",
+                evaluations={
+                    "test_oracle": EvaluationResult(score=4.0, explanation="ok")
+                },
+            )
+        ]
+
+    @patch("metareason.cli.main.az")
+    def test_display_with_90_hdi(self, mock_az):
+        """display_bayesian_analysis should not crash with hdi_5%/hdi_95% columns (90% HDI)."""
+        summary_df = self._make_summary_df("hdi_5%", "hdi_95%")
+        mock_az.summary.return_value = summary_df
+
+        mock_idata = MagicMock()
+        results = self._make_results()
+
+        # Should not raise KeyError
+        display_bayesian_analysis(mock_idata, "test_oracle", results, hdi_prob=0.90)
+
+    @patch("metareason.cli.main.az")
+    def test_display_with_94_hdi(self, mock_az):
+        """display_bayesian_analysis should work with default 94% HDI columns."""
+        summary_df = self._make_summary_df("hdi_3%", "hdi_97%")
+        mock_az.summary.return_value = summary_df
+
+        mock_idata = MagicMock()
+        results = self._make_results()
+
+        display_bayesian_analysis(mock_idata, "test_oracle", results, hdi_prob=0.94)
+
+    @patch("metareason.cli.main.az")
+    def test_display_with_80_hdi(self, mock_az):
+        """display_bayesian_analysis should work with 80% HDI columns."""
+        summary_df = self._make_summary_df("hdi_10%", "hdi_90%")
+        mock_az.summary.return_value = summary_df
+
+        mock_idata = MagicMock()
+        results = self._make_results()
+
+        display_bayesian_analysis(mock_idata, "test_oracle", results, hdi_prob=0.80)
