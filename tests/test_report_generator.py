@@ -156,8 +156,7 @@ class TestGenerateHtml:
         gen.generate_html(output_path)
 
         html = output_path.read_text()
-        assert "chart.js" in html
-        assert "tailwindcss" in html
+        assert "Chart" in html
         assert "chartData" in html
 
     def test_generate_html_contains_data_table(self, tmp_path):
@@ -188,3 +187,21 @@ class TestGenerateHtml:
         assert "Model Under Test" in html
         assert "Oracle Judges" in html
         assert "ollama" in html
+
+    def test_report_is_self_contained_no_cdn_urls(self, tmp_path):
+        """Reports must work offline: no external CDN references."""
+        results, spec, analysis_results = _make_fixtures()
+        gen = ReportGenerator(results, spec, analysis_results)
+        output_path = tmp_path / "report.html"
+        gen.generate_html(output_path)
+
+        html = output_path.read_text()
+        assert (
+            "cdn.tailwindcss.com" not in html
+        ), "Tailwind CDN found; report is not self-contained"
+        assert (
+            "cdn.jsdelivr.net" not in html
+        ), "jsdelivr CDN found; report is not self-contained"
+        assert (
+            "fonts.googleapis.com" not in html
+        ), "Google Fonts CDN found; report is not self-contained"

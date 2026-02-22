@@ -152,3 +152,24 @@ class TestCalibrationReportGenerator:
         generator.generate_html(output_path)
 
         assert output_path.exists()
+
+    def test_calibration_report_is_self_contained_no_cdn_urls(self, tmp_path):
+        """Calibration reports must work offline: no external CDN references."""
+        config = make_calibrate_config()
+        scores = [4.0, 3.5, 4.5, 4.0, 3.0, 5.0, 4.0, 4.5, 3.5, 4.0]
+        analysis = make_analysis_result()
+
+        generator = CalibrationReportGenerator(config, scores, analysis)
+        output_path = tmp_path / "report.html"
+        generator.generate_html(output_path)
+
+        html = output_path.read_text()
+        assert (
+            "cdn.tailwindcss.com" not in html
+        ), "Tailwind CDN found; report is not self-contained"
+        assert (
+            "cdn.jsdelivr.net" not in html
+        ), "jsdelivr CDN found; report is not self-contained"
+        assert (
+            "fonts.googleapis.com" not in html
+        ), "Google Fonts CDN found; report is not self-contained"
