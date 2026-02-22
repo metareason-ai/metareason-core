@@ -177,7 +177,7 @@ class OracleConfig(BaseModel):
     model: str
     adapter: AdapterConfig
     max_tokens: int = 2000
-    temperature: Optional[int] = 1
+    temperature: Optional[float] = Field(default=1.0, ge=0.0, le=2.0)
     rubric: Optional[str] = None
 
 
