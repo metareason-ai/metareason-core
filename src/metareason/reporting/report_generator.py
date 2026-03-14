@@ -154,38 +154,94 @@ class ReportGenerator:
             oracle_data["noise_hdi_lower"] = round(float(noise_hdi[0]), 4)
             oracle_data["noise_hdi_upper"] = round(float(noise_hdi[1]), 4)
 
-            # Parameter space scatter data
-            if self.spec_config.axes:
-                continuous_axes = [
-                    a for a in self.spec_config.axes if a.type == "continuous"
-                ]
-                if len(continuous_axes) >= 2:
-                    oracle_data["has_parameter_space"] = True
-                    pairs = []
-                    from itertools import combinations
-
-                    for ax_x, ax_y in combinations(continuous_axes, 2):
-                        points = []
-                        for i, r in enumerate(self.results):
-                            points.append(
-                                {
-                                    "x": round(float(r.sample_params[ax_x.name]), 4),
-                                    "y": round(float(r.sample_params[ax_y.name]), 4),
-                                    "score": float(scores[i]),
-                                }
-                            )
-                        pairs.append(
-                            {
-                                "x_label": ax_x.name,
-                                "y_label": ax_y.name,
-                                "points": points,
-                            }
+            # Score by Parameter — mean score per value of each axis
+            cat_axes = [a for a in self.spec_config.axes if a.type == "categorical"]
+            if cat_axes:
+                breakdowns = []
+                for ax in cat_axes:
+                    values = []
+                    means = []
+                    counts = []
+                    for val in ax.values:
+                        mask = [
+                            str(r.sample_params.get(ax.name)) == str(val)
+                            for r in self.results
+                        ]
+                        group_scores = scores[mask]
+                        values.append(str(val))
+                        means.append(
+                            round(float(group_scores.mean()), 2)
+                            if len(group_scores) > 0
+                            else 0
                         )
-                    oracle_data["parameter_pairs"] = pairs
-                else:
-                    oracle_data["has_parameter_space"] = False
+                        counts.append(int(group_scores.shape[0]))
+                    breakdowns.append(
+                        {
+                            "axis_name": ax.name,
+                            "values": values,
+                            "means": means,
+                            "counts": counts,
+                        }
+                    )
+                oracle_data["has_breakdowns"] = True
+                oracle_data["category_breakdowns"] = breakdowns
             else:
-                oracle_data["has_parameter_space"] = False
+                oracle_data["has_breakdowns"] = False
+
+            # Interaction heatmap — 2 most impactful categoricals
+            if len(cat_axes) >= 2:
+                # Pick the 2 categoricals with the most score variance
+                axis_variance = []
+                for ax in cat_axes:
+                    group_means = []
+                    for val in ax.values:
+                        mask = [
+                            str(r.sample_params.get(ax.name)) == str(val)
+                            for r in self.results
+                        ]
+                        gs = scores[mask]
+                        if len(gs) > 0:
+                            group_means.append(float(gs.mean()))
+                    axis_variance.append(
+                        (np.var(group_means) if group_means else 0, ax)
+                    )
+                axis_variance.sort(key=lambda t: t[0], reverse=True)
+                ax_row = axis_variance[0][1]
+                ax_col = axis_variance[1][1]
+
+                row_vals = [str(v) for v in ax_row.values]
+                col_vals = [str(v) for v in ax_col.values]
+                grid = []
+                count_grid = []
+                for rv in row_vals:
+                    row = []
+                    crow = []
+                    for cv in col_vals:
+                        mask = [
+                            str(r.sample_params.get(ax_row.name)) == rv
+                            and str(r.sample_params.get(ax_col.name)) == cv
+                            for r in self.results
+                        ]
+                        cell_scores = scores[mask]
+                        if len(cell_scores) > 0:
+                            row.append(round(float(cell_scores.mean()), 2))
+                        else:
+                            row.append(None)
+                        crow.append(int(cell_scores.shape[0]))
+                    grid.append(row)
+                    count_grid.append(crow)
+
+                oracle_data["has_interaction"] = True
+                oracle_data["interaction"] = {
+                    "row_axis": ax_row.name,
+                    "col_axis": ax_col.name,
+                    "row_values": row_vals,
+                    "col_values": col_vals,
+                    "means": grid,
+                    "counts": count_grid,
+                }
+            else:
+                oracle_data["has_interaction"] = False
 
             chart_data[oracle_name] = oracle_data
 
@@ -200,5 +256,6 @@ class ReportGenerator:
             chartjs_annotation_source=_load_vendor_asset(
                 "chartjs-plugin-annotation.min.js"
             ),
+            chartjs_matrix_source=_load_vendor_asset("chartjs-chart-matrix.min.js"),
             **data,
         )

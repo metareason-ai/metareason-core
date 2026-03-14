@@ -9,6 +9,7 @@ from rich.console import Console
 from metareason.cli.main import (
     _run_bayesian_analysis,
     display_bayesian_analysis,
+    display_parameter_effects,
     metareason,
 )
 from metareason.oracles.oracle_base import EvaluationResult
@@ -893,3 +894,185 @@ class TestDisplayBayesianAnalysis:
         results = self._make_results()
 
         display_bayesian_analysis(mock_idata, "test_oracle", results, hdi_prob=0.80)
+
+
+# --- display_parameter_effects ---
+
+
+class TestDisplayParameterEffects:
+    def test_display_basic(self):
+        effects_result = {
+            "intercept": {"mean": 3.5, "hdi_lower": 3.0, "hdi_upper": 4.0},
+            "effects": [
+                {
+                    "parameter": "temperature",
+                    "type": "continuous",
+                    "level": None,
+                    "reference_level": None,
+                    "effect_mean": 0.5,
+                    "effect_median": 0.48,
+                    "hdi_lower": 0.1,
+                    "hdi_upper": 0.9,
+                    "prob_positive": 0.97,
+                    "prob_negative": 0.03,
+                    "standardization": {"mean": 0.5, "std": 0.29},
+                },
+            ],
+            "oracle_noise_mean": 0.3,
+            "oracle_noise_hdi": (0.1, 0.5),
+            "n_samples": 20,
+            "n_predictors": 1,
+            "hdi_prob": 0.94,
+        }
+        # Should not raise
+        display_parameter_effects(effects_result, "test_oracle")
+
+    def test_display_categorical_with_level(self):
+        effects_result = {
+            "intercept": {"mean": 3.5, "hdi_lower": 3.0, "hdi_upper": 4.0},
+            "effects": [
+                {
+                    "parameter": "tone",
+                    "type": "categorical",
+                    "level": "casual",
+                    "reference_level": "formal",
+                    "effect_mean": -2.0,
+                    "effect_median": -1.98,
+                    "hdi_lower": -2.5,
+                    "hdi_upper": -1.5,
+                    "prob_positive": 0.01,
+                    "prob_negative": 0.99,
+                    "standardization": None,
+                },
+            ],
+            "oracle_noise_mean": 0.3,
+            "oracle_noise_hdi": (0.1, 0.5),
+            "n_samples": 30,
+            "n_predictors": 1,
+            "hdi_prob": 0.94,
+        }
+        # Should not raise
+        display_parameter_effects(effects_result, "test_oracle")
+
+    def test_display_inconclusive_effect(self):
+        effects_result = {
+            "intercept": {"mean": 3.5, "hdi_lower": 3.0, "hdi_upper": 4.0},
+            "effects": [
+                {
+                    "parameter": "x",
+                    "type": "continuous",
+                    "level": None,
+                    "reference_level": None,
+                    "effect_mean": 0.05,
+                    "effect_median": 0.04,
+                    "hdi_lower": -0.2,
+                    "hdi_upper": 0.3,
+                    "prob_positive": 0.6,
+                    "prob_negative": 0.4,
+                    "standardization": {"mean": 0.5, "std": 0.29},
+                },
+            ],
+            "oracle_noise_mean": 0.3,
+            "oracle_noise_hdi": (0.1, 0.5),
+            "n_samples": 10,
+            "n_predictors": 1,
+            "hdi_prob": 0.94,
+        }
+        # Should not raise
+        display_parameter_effects(effects_result, "test_oracle")
+
+
+# --- _run_bayesian_analysis with parameter effects ---
+
+
+class TestRunBayesianAnalysisWithEffects:
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    def test_run_bayesian_analysis_includes_effects(self, mock_analyzer_class):
+        import tempfile
+        from pathlib import Path
+
+        from metareason.pipeline.loader import load_spec as real_load_spec
+
+        spec_yaml = """\
+spec_id: "test"
+pipeline:
+  - template: "Hello {{ temp }}"
+    adapter:
+      name: "ollama"
+    model: "test-model"
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 100
+sampling:
+  method: "latin_hypercube"
+  optimization: "maximin"
+n_variants: 1
+oracles:
+  coherence_judge:
+    type: "llm_judge"
+    model: "test-model"
+    adapter:
+      name: "ollama"
+    rubric: "Rate 1-5"
+axes:
+  - name: temp
+    type: continuous
+    distribution: uniform
+    params:
+      low: 0.0
+      high: 1.0
+"""
+        with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
+            f.write(spec_yaml)
+            spec_path = Path(f.name)
+
+        spec_config = real_load_spec(spec_path)
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer.estimate_parameter_effects.return_value = {
+            "intercept": {"mean": 3.5, "hdi_lower": 3.0, "hdi_upper": 4.0},
+            "effects": [],
+            "oracle_noise_mean": 0.3,
+            "oracle_noise_hdi": (0.1, 0.5),
+            "n_samples": 10,
+            "n_predictors": 0,
+            "hdi_prob": 0.94,
+        }
+        mock_analyzer_class.return_value = mock_analyzer
+
+        results = [make_sample_result()]
+
+        test_console = Console(file=open("/dev/null", "w"))
+        analysis_results = _run_bayesian_analysis(spec_config, results, test_console)
+
+        mock_analyzer.estimate_parameter_effects.assert_called_once()
+        assert "parameter_effects" in analysis_results["coherence_judge"]
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    def test_run_bayesian_analysis_no_effects_without_axes(self, mock_analyzer_class):
+        import tempfile
+        from pathlib import Path
+
+        from metareason.pipeline.loader import load_spec as real_load_spec
+
+        with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
+            f.write(VALID_SPEC_YAML)
+            spec_path = Path(f.name)
+
+        spec_config = real_load_spec(spec_path)
+        results = [make_sample_result()]
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        test_console = Console(file=open("/dev/null", "w"))
+        analysis_results = _run_bayesian_analysis(spec_config, results, test_console)
+
+        mock_analyzer.estimate_parameter_effects.assert_not_called()
+        assert "parameter_effects" not in analysis_results["coherence_judge"]

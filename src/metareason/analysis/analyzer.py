@@ -4,7 +4,7 @@ import arviz as az
 import numpy as np
 import pymc as pm
 
-from metareason.config.models import BayesianAnalysisConfig
+from metareason.config.models import AxisConfig, BayesianAnalysisConfig
 from metareason.pipeline.runner import SampleResult
 
 
@@ -183,4 +183,175 @@ class BayesianAnalyzer:
                 float(noise_hdi["oracle_noise"].values[1]),
             ),
             "n_samples": len(scores),
+        }
+
+    def _build_design_matrix(self, oracle_name: str, axes: List[AxisConfig]) -> tuple:
+        """Build design matrix from sample params and axis configs.
+
+        Continuous axes are z-standardized. Categorical axes use reference
+        coding (first value in axis.values is the reference level).
+
+        Returns:
+            (X, col_info) where X is ndarray of shape (n_samples, n_predictors)
+            and col_info is a list of dicts with column metadata.
+        """
+        columns = []
+        col_info = []
+
+        for axis in axes:
+            values = [r.sample_params[axis.name] for r in self.results]
+
+            if axis.type == "continuous":
+                arr = np.array(values, dtype=float)
+                std = arr.std(ddof=0)
+                if std == 0:
+                    continue  # Skip zero-variance axes
+                mean = arr.mean()
+                standardized = (arr - mean) / std
+                columns.append(standardized)
+                col_info.append(
+                    {
+                        "parameter": axis.name,
+                        "type": "continuous",
+                        "level": None,
+                        "reference_level": None,
+                        "standardization": {
+                            "mean": float(mean),
+                            "std": float(std),
+                        },
+                    }
+                )
+
+            elif axis.type == "categorical":
+                reference = axis.values[0]
+                non_ref_levels = axis.values[1:]
+                for level in non_ref_levels:
+                    dummy = np.array([1.0 if v == level else 0.0 for v in values])
+                    columns.append(dummy)
+                    col_info.append(
+                        {
+                            "parameter": axis.name,
+                            "type": "categorical",
+                            "level": str(level),
+                            "reference_level": str(reference),
+                            "standardization": None,
+                        }
+                    )
+
+        if columns:
+            X = np.column_stack(columns)
+        else:
+            X = np.empty((len(self.results), 0))
+
+        return X, col_info
+
+    def estimate_parameter_effects(
+        self,
+        oracle_name: str,
+        axes: List[AxisConfig],
+        hdi_prob: float = 0.94,
+    ) -> dict:
+        """Estimate per-parameter effect sizes using Bayesian linear regression.
+
+        Args:
+            oracle_name: Oracle to analyze.
+            axes: List of AxisConfig defining parameter axes.
+            hdi_prob: Probability mass for credible intervals.
+
+        Returns:
+            Dict with intercept, sorted effects list, noise, sample counts,
+            HDI prob.
+
+        Raises:
+            ValueError: If axes is empty or no valid predictor columns.
+        """
+        if not axes:
+            raise ValueError("axes must be non-empty for parameter effects analysis")
+
+        scores = np.array([r.evaluations[oracle_name].score for r in self.results])
+        X, col_info = self._build_design_matrix(oracle_name, axes)
+
+        if X.shape[1] == 0:
+            raise ValueError(
+                "No valid predictor columns after filtering zero-variance axes"
+            )
+
+        with pm.Model():
+            intercept = pm.Normal(
+                "intercept",
+                mu=self.analysis_config.prior_quality_mu,
+                sigma=self.analysis_config.prior_quality_sigma,
+            )
+            beta = pm.Normal(
+                "beta",
+                mu=0,
+                sigma=self.analysis_config.prior_effect_sigma,
+                shape=X.shape[1],
+            )
+            noise = pm.HalfNormal(
+                "oracle_noise",
+                sigma=self.analysis_config.prior_noise_sigma,
+            )
+            mu = intercept + pm.math.dot(X, beta)
+            pm.Normal("observed", mu=mu, sigma=noise, observed=scores)
+
+            trace = pm.sample(
+                draws=self.analysis_config.mcmc_draws,
+                tune=self.analysis_config.mcmc_tune,
+                chains=self.analysis_config.mcmc_chains,
+            )
+
+        posterior = trace.posterior
+        intercept_samples = posterior["intercept"].values.flatten()
+        beta_samples = posterior["beta"].values
+        noise_samples = posterior["oracle_noise"].values.flatten()
+
+        # Intercept stats
+        intercept_hdi = az.hdi(trace, var_names=["intercept"], hdi_prob=hdi_prob)
+        noise_hdi = az.hdi(trace, var_names=["oracle_noise"], hdi_prob=hdi_prob)
+
+        # Per-predictor effects
+        effects = []
+        n_chains, n_draws = beta_samples.shape[0], beta_samples.shape[1]
+        flat_beta = beta_samples.reshape(n_chains * n_draws, -1)
+
+        beta_hdi = az.hdi(trace, var_names=["beta"], hdi_prob=hdi_prob)
+
+        for k, info in enumerate(col_info):
+            samples_k = flat_beta[:, k]
+            hdi_vals = beta_hdi["beta"].values[k]
+
+            effect_entry = {
+                "parameter": info["parameter"],
+                "type": info["type"],
+                "level": info["level"],
+                "reference_level": info["reference_level"],
+                "effect_mean": float(samples_k.mean()),
+                "effect_median": float(np.median(samples_k)),
+                "hdi_lower": float(hdi_vals[0]),
+                "hdi_upper": float(hdi_vals[1]),
+                "prob_positive": float((samples_k > 0).mean()),
+                "prob_negative": float((samples_k < 0).mean()),
+                "standardization": info["standardization"],
+            }
+            effects.append(effect_entry)
+
+        # Sort by absolute effect magnitude (descending)
+        effects.sort(key=lambda e: abs(e["effect_mean"]), reverse=True)
+
+        return {
+            "intercept": {
+                "mean": float(intercept_samples.mean()),
+                "hdi_lower": float(intercept_hdi["intercept"].values[0]),
+                "hdi_upper": float(intercept_hdi["intercept"].values[1]),
+            },
+            "effects": effects,
+            "oracle_noise_mean": float(noise_samples.mean()),
+            "oracle_noise_hdi": (
+                float(noise_hdi["oracle_noise"].values[0]),
+                float(noise_hdi["oracle_noise"].values[1]),
+            ),
+            "n_samples": len(scores),
+            "n_predictors": X.shape[1],
+            "hdi_prob": hdi_prob,
         }
