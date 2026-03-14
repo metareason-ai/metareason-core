@@ -215,6 +215,9 @@ class BayesianAnalysisConfig(BaseModel):
     prior_quality_sigma: float = Field(default=1.0, gt=0.0)
     prior_noise_sigma: float = Field(default=0.5, gt=0.0)
 
+    # Prior for regression effect sizes
+    prior_effect_sigma: float = Field(default=1.0, gt=0.0)
+
     # High-Density Interval (HDI) configuration
     hdi_probability: float = Field(default=0.94, gt=0.0, lt=1.0)
 

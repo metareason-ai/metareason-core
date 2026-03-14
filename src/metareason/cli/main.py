@@ -89,6 +89,21 @@ def _run_bayesian_analysis(spec_config, results, con, oracle_names=None):
                     f"[yellow]\u26a0\ufe0f  Analysis failed for {oracle_name}: {e}[/yellow]"
                 )
 
+    # Run parameter effects analysis if axes exist
+    if hasattr(spec_config, "axes") and spec_config.axes:
+        for oracle_name in oracle_names:
+            if oracle_name in analysis_results:
+                try:
+                    effects_result = analyzer.estimate_parameter_effects(
+                        oracle_name, spec_config.axes, hdi_prob=hdi_prob
+                    )
+                    analysis_results[oracle_name]["parameter_effects"] = effects_result
+                except Exception as e:
+                    con.print(
+                        f"[yellow]Parameter effects analysis failed for "
+                        f"{oracle_name}: {e}[/yellow]"
+                    )
+
     return analysis_results
 
 
@@ -126,6 +141,47 @@ def display_population_quality(result: dict, oracle_name: str):
     )
 
     console.print(f"[dim]Based on {result['n_samples']} evaluations[/dim]")
+
+
+def display_parameter_effects(effects_result: dict, oracle_name: str):
+    """Display parameter effects analysis results."""
+    hdi_pct = int(effects_result["hdi_prob"] * 100)
+
+    console.print(f"\n[bold magenta]Parameter Effects: {oracle_name}[/bold magenta]\n")
+
+    table = Table(title="What Matters")
+    table.add_column("Parameter", style="cyan")
+    table.add_column("Effect", justify="right")
+    table.add_column(f"{hdi_pct}% HDI", justify="center")
+    table.add_column("P(Direction)", justify="center")
+
+    for e in effects_result["effects"]:
+        name = e["parameter"]
+        if e["level"]:
+            name += f": {e['level']}"
+
+        # Color by direction certainty
+        hdi_crosses_zero = e["hdi_lower"] <= 0 <= e["hdi_upper"]
+        if hdi_crosses_zero:
+            effect_str = f"[dim]{e['effect_mean']:+.3f}[/dim]"
+            direction = "[dim]inconclusive[/dim]"
+        elif e["effect_mean"] > 0:
+            prob = e["prob_positive"]
+            effect_str = f"[green]{e['effect_mean']:+.3f}[/green]"
+            direction = f"[green]{prob:.0%} positive[/green]"
+        else:
+            prob = e["prob_negative"]
+            effect_str = f"[red]{e['effect_mean']:+.3f}[/red]"
+            direction = f"[red]{prob:.0%} negative[/red]"
+
+        hdi_str = f"[{e['hdi_lower']:+.3f}, {e['hdi_upper']:+.3f}]"
+        table.add_row(name, effect_str, hdi_str, direction)
+
+    console.print(table)
+    console.print(
+        f"[dim]Based on {effects_result['n_samples']} samples, "
+        f"{effects_result['n_predictors']} predictor(s)[/dim]"
+    )
 
 
 def display_bayesian_analysis(
@@ -302,6 +358,10 @@ def run(spec, output, analyze, report):
             console.print()
             for oracle_name, pop_result in analysis_results.items():
                 display_population_quality(pop_result, oracle_name)
+                if "parameter_effects" in pop_result:
+                    display_parameter_effects(
+                        pop_result["parameter_effects"], oracle_name
+                    )
 
         # Save results to JSON file
         if output:
@@ -439,6 +499,8 @@ def analyze(results_json, spec, oracle, report):
         console.print()
         for oracle_name, pop_result in analysis_results.items():
             display_population_quality(pop_result, oracle_name)
+            if "parameter_effects" in pop_result:
+                display_parameter_effects(pop_result["parameter_effects"], oracle_name)
 
         # Save analysis results
         if analysis_results:

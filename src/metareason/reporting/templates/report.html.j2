@@ -7,6 +7,7 @@
 
     <script>{{ chartjs_source }}</script>
     <script>{{ chartjs_annotation_source }}</script>
+    <script>{{ chartjs_matrix_source }}</script>
 
     <style>
         /* Base */
@@ -158,7 +159,16 @@
         }
         @media (min-width: 1024px) {
             .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
+
+        /* Help tooltip */
+        .help-btn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: #e2e8f0; color: #64748b; font-size: 12px; font-weight: 600; cursor: pointer; border: none; line-height: 1; margin-left: 6px; position: relative; flex-shrink: 0; }
+        .help-btn:hover { background: #cbd5e1; color: #334155; }
+        .help-popup { display: none; position: absolute; top: 28px; right: 0; width: 320px; background: #1e293b; color: #e2e8f0; padding: 14px 16px; border-radius: 8px; font-size: 12px; line-height: 1.55; font-weight: 400; z-index: 50; box-shadow: 0 10px 25px rgba(0,0,0,0.25); }
+        .help-popup::before { content: ''; position: absolute; top: -6px; right: 8px; width: 12px; height: 12px; background: #1e293b; transform: rotate(45deg); }
+        .help-popup strong { color: #fff; }
+        .help-btn.active .help-popup { display: block; }
 
         /* Print */
         @media print {
@@ -302,7 +312,10 @@
         <!-- Posterior Distribution -->
         <div class="card p-6">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="font-bold text-slate-700">Estimated True Quality</h3>
+                <div class="flex items-center">
+                    <h3 class="font-bold text-slate-700">Estimated True Quality</h3>
+                    <button class="help-btn" onclick="this.classList.toggle('active')">?<div class="help-popup"><strong>What is this?</strong> This curve shows our best estimate of the model's true quality after accounting for judge measurement error. The peak is the most likely quality score. The <strong>shaded region</strong> is the {{ hdi_pct }}% High Density Interval (HDI) &mdash; we are {{ hdi_pct }}% confident the true quality falls within this range. A narrower curve means more certainty; a wider curve means we need more data.</div></button>
+                </div>
                 <span class="text-xs font-mono bg-blue-50 text-blue-600 px-2 py-1 rounded">Bayesian Posterior</span>
             </div>
             <div class="relative h-64 w-full">
@@ -316,7 +329,10 @@
         <!-- Score Distribution -->
         <div class="card p-6">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="font-bold text-slate-700">Observed Score Distribution</h3>
+                <div class="flex items-center">
+                    <h3 class="font-bold text-slate-700">Observed Score Distribution</h3>
+                    <button class="help-btn" onclick="this.classList.toggle('active')">?<div class="help-popup"><strong>What is this?</strong> A histogram of the raw scores the judge assigned across all {{ n_variants }} evaluations. The red dashed line marks the mean score. <strong>How to read it:</strong> If most bars cluster at 4-5, the model performs consistently well. A wide spread across 1-5 suggests high variability &mdash; check the parameter effects chart to see what drives it.</div></button>
+                </div>
                 <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">n={{ n_variants }}</span>
             </div>
             <div class="relative h-64 w-full">
@@ -327,76 +343,59 @@
             </div>
         </div>
 
-        <!-- Judge Noise -->
+    </section>
+
+    <!-- Score by Parameter (only when no interaction heatmap) -->
+    {% if chart_data[oracle_name].has_breakdowns and not chart_data[oracle_name].has_interaction %}
+    <section class="mb-8">
         <div class="card p-6">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="font-bold text-slate-700">Judge Measurement Noise</h3>
-                <span class="text-xs font-mono bg-slate-100 text-slate-600 px-2 py-1 rounded">{{ oracle_configs[oracle_name].model }}</span>
+                <div class="flex items-center">
+                    <h3 class="font-bold text-slate-700">Score by Parameter</h3>
+                    <button class="help-btn" onclick="this.classList.toggle('active')">?<div class="help-popup"><strong>What is this?</strong> Mean score for each value of the categorical parameter. Taller bars = higher average scores. The number above each bar is the count of evaluations in that group. <strong>How to read it:</strong> Compare bar heights to see which parameter values produce the best or worst results.</div></button>
+                </div>
             </div>
-            <div class="relative h-64 w-full">
-                <canvas id="noiseChart-{{ oracle_name }}"></canvas>
+            {% for bd in chart_data[oracle_name].category_breakdowns %}
+            <div class="{% if not loop.first %}mt-4 pt-4 border-b{% endif %}">
+                <div class="text-xs text-slate-500 uppercase font-semibold mb-2">{{ bd.axis_name }}</div>
+                <div class="relative" style="height: 180px;">
+                    <canvas id="breakdownChart-{{ oracle_name }}-{{ loop.index0 }}"></canvas>
+                </div>
             </div>
-            <div class="mt-4 text-center text-xs text-slate-500">
-                Estimated measurement uncertainty of the oracle judge.
-            </div>
+            {% endfor %}
         </div>
+    </section>
+    {% endif %}
 
-        <!-- Parameter Space -->
-        <div class="card p-6 flex flex-col">
+    <!-- Parameter Interactions -->
+    {% if chart_data[oracle_name].has_interaction %}
+    <section class="mb-8">
+        <div class="card p-6">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="font-bold text-slate-700">Parameter Space Coverage</h3>
+                <div class="flex items-center">
+                    <h3 class="font-bold text-slate-700">Parameter Interactions</h3>
+                    <button class="help-btn" onclick="this.classList.toggle('active')">?<div class="help-popup"><strong>What is this?</strong> Mean scores for every combination of the two most impactful categorical parameters. Green = higher scores, red = lower scores. <strong>How to read it:</strong> Look for cells that stand out &mdash; these are parameter combinations that produce notably better or worse results.</div></button>
+                </div>
             </div>
-            {% if chart_data[oracle_name].has_parameter_space %}
-            <div class="relative h-64 w-full">
-                <canvas id="paramChart-{{ oracle_name }}"></canvas>
+            <div class="relative w-full" style="height: {{ chart_data[oracle_name].interaction.row_values | length * 90 + 80 }}px;">
+                <canvas id="interactionChart-{{ oracle_name }}"></canvas>
             </div>
-            {% else %}
-            <div class="flex-grow flex flex-col items-center justify-center bg-amber-50 rounded-lg border border-amber-100 p-8 text-center h-64">
-                <svg class="w-10 h-10 text-amber-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                <p class="font-medium text-amber-800">Insufficient Data for Visualization</p>
-                <p class="text-sm text-amber-600 mt-1">Requires at least 2 continuous axes for parameter space plot.</p>
+            <!-- Gradient legend -->
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 12px;">
+                <span style="font-size: 11px; color: #94a3b8;">1.0</span>
+                <div style="width: 200px; height: 10px; border-radius: 5px; background: linear-gradient(to right, #fca5a5, #fde68a, #86efac);"></div>
+                <span style="font-size: 11px; color: #94a3b8;">5.0</span>
             </div>
-            {% endif %}
+            <div style="text-align: center; margin-top: 6px; font-size: 11px; color: #94a3b8;">
+                x-axis: <strong style="color: #64748b;">{{ chart_data[oracle_name].interaction.col_axis }}</strong>
+                &nbsp;&middot;&nbsp;
+                y-axis: <strong style="color: #64748b;">{{ chart_data[oracle_name].interaction.row_axis }}</strong>
+            </div>
         </div>
     </section>
-    {% endfor %}
+    {% endif %}
 
-    <!-- Evaluation Data Table -->
-    <section class="card overflow-hidden mb-8">
-        <div class="bg-slate-50 border-b px-6 py-4 flex justify-between items-center">
-            <h3 class="font-bold text-slate-700">Evaluation Data</h3>
-            <span class="text-xs text-slate-500">{{ n_variants }} Records</span>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
-                <thead class="bg-white text-slate-500 border-b">
-                    <tr>
-                        <th class="px-6 py-3 w-16 text-center">#</th>
-                        <th class="px-6 py-3">Parameters</th>
-                        {% for oracle_name in oracle_analyses.keys() %}
-                        <th class="px-6 py-3 w-32 text-center">{{ oracle_name }}</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    {% for result in results %}
-                    <tr class="hover:bg-slate-50 transition">
-                        <td class="px-6 py-4 text-center font-mono text-slate-400">{{ loop.index }}</td>
-                        <td class="px-6 py-4">
-                            {% for k, v in result.sample_params.items() %}
-                            <span class="code-pill{% if not loop.first %} ml-2{% endif %}">{{ k }}: {{ v if v is string else "%.2f"|format(v) }}</span>
-                            {% endfor %}
-                        </td>
-                        {% for oracle_name in oracle_analyses.keys() %}
-                        {% set score = result.evaluations[oracle_name].score %}
-                        <td class="px-6 py-4 text-center font-bold {% if score >= 4.5 %}text-indigo-700 bg-indigo-50 rounded{% else %}text-slate-700{% endif %}">{{ score | round(1) }}</td>
-                        {% endfor %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </section>
+    {% endfor %}
 
     <footer class="mt-12 text-center text-xs text-slate-400 pb-8">
         MetaReason Report Generator &middot; {{ timestamp[:4] }}
@@ -404,6 +403,15 @@
 
     <!-- Chart.js Configuration -->
     <script>
+    // Close help tooltips when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.classList.contains('help-btn')) {
+            document.querySelectorAll('.help-btn.active').forEach(function(btn) {
+                btn.classList.remove('active');
+            });
+        }
+    });
+
     (function() {
         const chartData = {{ chart_data | tojson }};
 
@@ -558,113 +566,178 @@
                 }
             });
 
-            // --- Noise Distribution ---
-            const noisePoints = d.noise_x.map((x, i) => ({x: x, y: d.noise_y[i]}));
-            new Chart(document.getElementById('noiseChart-' + oracleName), {
-                type: 'scatter',
-                data: {
-                    datasets: [{
-                        data: noisePoints,
-                        showLine: true,
-                        borderColor: '#64748b',
-                        borderWidth: 2,
-                        fill: false,
-                        pointRadius: 0,
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    ...commonScatterOpts,
-                    plugins: {
-                        legend: { display: false },
-                        annotation: {
-                            annotations: {
-                                hdiBox: {
-                                    type: 'box',
-                                    xMin: d.noise_hdi_lower,
-                                    xMax: d.noise_hdi_upper,
-                                    backgroundColor: 'rgba(100, 116, 139, 0.12)',
-                                    borderWidth: 0
-                                },
-                                meanLine: {
-                                    type: 'line',
-                                    xMin: d.noise_mean,
-                                    xMax: d.noise_mean,
-                                    borderColor: '#ef4444',
-                                    borderWidth: 1.5,
-                                    borderDash: [5, 5],
-                                    label: {
-                                        display: true,
-                                        content: 'Mean: ' + d.noise_mean.toFixed(2),
-                                        position: 'start',
-                                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
-                                        font: { size: 10 }
+            // --- Score by Parameter (category breakdowns) ---
+            if (d.has_breakdowns) {
+                var palette = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+                d.category_breakdowns.forEach(function(bd, bi) {
+                    var ctx = document.getElementById('breakdownChart-' + oracleName + '-' + bi);
+                    if (!ctx) return;
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: bd.values,
+                            datasets: [{
+                                data: bd.means,
+                                backgroundColor: bd.values.map(function(_, i) { return palette[i % palette.length]; }),
+                                borderRadius: 4,
+                                barPercentage: 0.7
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                annotation: {
+                                    annotations: {
+                                        overallMean: {
+                                            type: 'line',
+                                            yMin: d.score_mean,
+                                            yMax: d.score_mean,
+                                            borderColor: 'rgba(0,0,0,0.3)',
+                                            borderWidth: 1.5,
+                                            borderDash: [5, 5],
+                                            label: {
+                                                display: true,
+                                                content: 'Overall: ' + d.score_mean.toFixed(2),
+                                                position: 'end',
+                                                backgroundColor: 'rgba(0,0,0,0.5)',
+                                                font: { size: 10 }
+                                            }
+                                        }
                                     }
                                 }
+                            },
+                            scales: {
+                                x: { grid: { display: false } },
+                                y: {
+                                    min: 0, max: 5,
+                                    grid: { color: '#f1f5f9' },
+                                    title: { display: true, text: 'Mean Score', font: { size: 11 } },
+                                    ticks: { stepSize: 1 }
+                                }
                             }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            type: 'linear',
-                            grid: { display: false },
-                            title: { display: true, text: 'Noise Magnitude', font: { size: 12 } },
-                            ticks: { callback: v => v.toFixed(2) }
                         },
-                        y: {
-                            grid: { color: '#f1f5f9' },
-                            beginAtZero: true,
-                            title: { display: true, text: 'Density', font: { size: 12 } },
-                            ticks: { display: false }
-                        }
+                        plugins: [{
+                            id: 'barLabels',
+                            afterDatasetsDraw: function(chart) {
+                                var ctx2 = chart.ctx;
+                                chart.data.datasets[0].data.forEach(function(val, i) {
+                                    var meta = chart.getDatasetMeta(0).data[i];
+                                    ctx2.fillStyle = '#64748b';
+                                    ctx2.font = '11px -apple-system, sans-serif';
+                                    ctx2.textAlign = 'center';
+                                    ctx2.fillText('n=' + bd.counts[i], meta.x, meta.y - 6);
+                                });
+                            }
+                        }]
+                    });
+                });
+            }
+
+            // --- Interaction heatmap (Chart.js matrix) ---
+            if (d.has_interaction) {
+                var inter = d.interaction;
+                var matrixData = [];
+                for (var ri = 0; ri < inter.row_values.length; ri++) {
+                    for (var ci = 0; ci < inter.col_values.length; ci++) {
+                        var v = inter.means[ri][ci];
+                        matrixData.push({
+                            x: inter.col_values[ci],
+                            y: inter.row_values[ri],
+                            v: v,
+                            count: inter.counts[ri][ci]
+                        });
                     }
                 }
-            });
 
-            // --- Parameter Space (if available) ---
-            if (d.has_parameter_space && d.parameter_pairs && d.parameter_pairs.length > 0) {
-                const pair = d.parameter_pairs[0];
-                const scores = pair.points.map(p => p.score);
-                const minScore = Math.min(...scores);
-                const maxScore = Math.max(...scores);
-                const range = maxScore - minScore || 1;
-
-                const bgColors = pair.points.map(p => {
-                    const t = (p.score - minScore) / range;
-                    const r = Math.round(79 + (16 - 79) * t);
-                    const g = Math.round(70 + (185 - 70) * t);
-                    const b = Math.round(229 + (129 - 229) * t);
+                function scoreColor(val) {
+                    if (val === null) return 'rgba(226,232,240,0.5)';
+                    var t = Math.max(0, Math.min(1, (val - 1) / 4));
+                    var r, g, b;
+                    if (t < 0.5) {
+                        var s = t * 2;
+                        r = 239 + (251 - 239) * s;
+                        g = 68 + (191 - 68) * s;
+                        b = 68 + (36 - 68) * s;
+                    } else {
+                        var s = (t - 0.5) * 2;
+                        r = 251 + (34 - 251) * s;
+                        g = 191 + (197 - 191) * s;
+                        b = 36 + (94 - 36) * s;
+                    }
+                    // Soften
+                    var mix = 0.25;
+                    r = Math.round(r + (255 - r) * mix);
+                    g = Math.round(g + (255 - g) * mix);
+                    b = Math.round(b + (255 - b) * mix);
                     return 'rgb(' + r + ',' + g + ',' + b + ')';
-                });
+                }
 
-                new Chart(document.getElementById('paramChart-' + oracleName), {
-                    type: 'scatter',
+                var nCols = inter.col_values.length;
+                var nRows = inter.row_values.length;
+
+                new Chart(document.getElementById('interactionChart-' + oracleName), {
+                    type: 'matrix',
                     data: {
                         datasets: [{
-                            data: pair.points.map(p => ({x: p.x, y: p.y})),
-                            backgroundColor: bgColors,
-                            borderColor: '#1e293b',
-                            borderWidth: 1,
-                            pointRadius: 8,
-                            pointHoverRadius: 10
+                            label: 'Mean Score',
+                            data: matrixData,
+                            backgroundColor: function(ctx) {
+                                return scoreColor(ctx.raw && ctx.raw.v);
+                            },
+                            borderColor: 'rgba(255,255,255,0.8)',
+                            borderWidth: 3,
+                            borderRadius: 6,
+                            width: function(ctx) {
+                                var a = ctx.chart.chartArea;
+                                return a ? (a.width / nCols) - 6 : 40;
+                            },
+                            height: function(ctx) {
+                                var a = ctx.chart.chartArea;
+                                return a ? (a.height / nRows) - 6 : 40;
+                            }
                         }]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                displayColors: false,
+                                callbacks: {
+                                    title: function(items) {
+                                        var raw = items[0].raw;
+                                        return raw.y + ' \u00d7 ' + raw.x;
+                                    },
+                                    label: function(item) {
+                                        var raw = item.raw;
+                                        if (raw.v === null) return 'No data';
+                                        return 'Mean score: ' + raw.v.toFixed(2) + '  (n=' + raw.count + ')';
+                                    }
+                                }
+                            }
+                        },
                         scales: {
                             x: {
-                                type: 'linear',
+                                type: 'category',
+                                labels: inter.col_values,
+                                offset: true,
                                 grid: { display: false },
-                                title: { display: true, text: pair.x_label, font: { size: 12 } }
+                                ticks: { font: { size: 12, weight: '600' }, color: '#475569' }
                             },
                             y: {
-                                grid: { color: '#f1f5f9' },
-                                title: { display: true, text: pair.y_label, font: { size: 12 } }
+                                type: 'category',
+                                labels: inter.row_values,
+                                offset: true,
+                                reverse: true,
+                                grid: { display: false },
+                                ticks: { font: { size: 12, weight: '600' }, color: '#475569' }
                             }
                         }
-                    }
+                    },
+                    plugins: []
                 });
             }
         });

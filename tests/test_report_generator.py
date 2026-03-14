@@ -129,11 +129,53 @@ class TestGenerateChartData:
         assert "population_mean" in d
         assert "noise_mean" in d
 
-    def test_parameter_space_insufficient_axes(self):
+    def test_category_breakdown(self):
         results, spec, analysis_results = _make_fixtures()
         gen = ReportGenerator(results, spec, analysis_results)
         chart_data = gen._generate_chart_data()
-        assert chart_data["test_oracle"]["has_parameter_space"] is False
+        d = chart_data["test_oracle"]
+        assert d["has_breakdowns"] is True
+        assert len(d["category_breakdowns"]) == 1  # only "tone" is categorical
+        bd = d["category_breakdowns"][0]
+        assert bd["axis_name"] == "tone"
+        assert bd["values"] == ["formal", "casual"]
+        assert len(bd["means"]) == 2
+        assert len(bd["counts"]) == 2
+
+    def test_no_category_breakdown_without_categorical_axes(self):
+        results, spec, analysis_results = _make_fixtures()
+        spec.axes = [a for a in spec.axes if a.type != "categorical"]
+        gen = ReportGenerator(results, spec, analysis_results)
+        chart_data = gen._generate_chart_data()
+        assert chart_data["test_oracle"]["has_breakdowns"] is False
+
+    def test_interaction_heatmap_requires_two_categoricals(self):
+        results, spec, analysis_results = _make_fixtures()
+        # Fixture only has 1 categorical axis ("tone")
+        gen = ReportGenerator(results, spec, analysis_results)
+        chart_data = gen._generate_chart_data()
+        assert chart_data["test_oracle"]["has_interaction"] is False
+
+    def test_interaction_heatmap_with_two_categoricals(self):
+        results, spec, analysis_results = _make_fixtures()
+        # Add a second categorical axis
+        spec.axes.append(
+            AxisConfig(
+                name="audience",
+                type="categorical",
+                values=["kids", "adults"],
+            )
+        )
+        # Give results different audience values
+        for i, r in enumerate(results):
+            r.sample_params["audience"] = "kids" if i % 2 == 0 else "adults"
+        gen = ReportGenerator(results, spec, analysis_results)
+        chart_data = gen._generate_chart_data()
+        d = chart_data["test_oracle"]
+        assert d["has_interaction"] is True
+        assert "row_axis" in d["interaction"]
+        assert "col_axis" in d["interaction"]
+        assert len(d["interaction"]["means"]) > 0
 
 
 class TestGenerateHtml:
@@ -158,17 +200,6 @@ class TestGenerateHtml:
         html = output_path.read_text()
         assert "Chart" in html
         assert "chartData" in html
-
-    def test_generate_html_contains_data_table(self, tmp_path):
-        results, spec, analysis_results = _make_fixtures()
-        gen = ReportGenerator(results, spec, analysis_results)
-        output_path = tmp_path / "report.html"
-        gen.generate_html(output_path)
-
-        html = output_path.read_text()
-        assert "Evaluation Data" in html
-        assert "tone: formal" in html
-        assert "complexity: 5.00" in html
 
     def test_generate_html_creates_parent_dirs(self, tmp_path):
         results, spec, analysis_results = _make_fixtures()

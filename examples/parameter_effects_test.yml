@@ -1,0 +1,113 @@
+spec_id: "parameter_effects_test"
+
+pipeline:
+  - template: |
+      You are writing for an audience of {{ audience }}.
+
+      Explain {{ topic }} in EXACTLY {{ sentence_count | int }} sentences.
+      Rules:
+      - Use EXACTLY {{ sentence_count | int }} sentences. Not {{ sentence_count | int - 1 }}. Not {{ sentence_count | int + 1 }}.
+      - Every word must be appropriate for your target audience.
+      - No titles, headers, bullet points, or markdown formatting.
+      - No preamble like "Sure!" or "Here's my explanation:".
+      - Start directly with your first sentence.
+    adapter:
+      name: "ollama"
+    model: "gemma3:27b"
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 600
+
+sampling:
+  method: "latin_hypercube"
+  optimization: "maximin"
+  random_seed: 42
+
+n_variants: 25
+
+oracles:
+  quality_judge:
+    type: "llm_judge"
+    model: "gemma3:27b"
+    adapter:
+      name: "ollama"
+    max_tokens: 800
+    temperature: 0.2
+    rubric: |
+      You are a strict evaluator. Score this response on four weighted sub-scores,
+      then compute a final score.
+
+      The model was asked to explain a topic in a specific number of sentences,
+      for a specific audience.
+
+      ## Sub-scores (each 1-5):
+
+      **A. Sentence Count Accuracy (weight: 30%)**
+      Count the sentences carefully. A sentence ends with a period, question mark,
+      or exclamation point.
+      5 = Exact match
+      4 = Off by 1
+      3 = Off by 2
+      2 = Off by 3-4
+      1 = Off by 5+
+
+      **B. Audience Appropriateness (weight: 30%)**
+      Does the vocabulary, tone, and complexity match the target audience?
+      5 = Perfect match — a 6-year-old could understand the "6-year-old" version,
+          a PhD physicist would find the "PhD researcher" version substantive
+      4 = Mostly appropriate, minor lapses
+      3 = Mixed — some parts appropriate, others not
+      2 = Largely inappropriate for the audience
+      1 = Completely wrong register (e.g., jargon for children, baby talk for PhDs)
+
+      **C. Content Accuracy (weight: 20%)**
+      Is the information factually correct?
+      5 = All facts correct
+      4 = Minor inaccuracy
+      3 = One significant error
+      2 = Multiple errors
+      1 = Mostly wrong
+
+      **D. Format Compliance (weight: 20%)**
+      Did the response follow ALL formatting rules? (no titles, no headers, no
+      bullet points, no preamble, no markdown, starts directly with content)
+      5 = Perfect compliance
+      4 = One minor violation
+      3 = Two violations
+      2 = Multiple violations
+      1 = Ignored formatting rules entirely
+
+      ## Scoring
+      Compute: score = round(A*0.3 + B*0.3 + C*0.2 + D*0.2)
+      Clamp to 1-5.
+
+      Return JSON:
+      {"score": <final>, "explanation": "A=X B=Y C=Z D=W. <brief justification>"}
+
+analysis:
+  mcmc_draws: 2000
+  mcmc_tune: 1000
+  mcmc_chains: 4
+  hdi_probability: 0.94
+
+axes:
+  - name: "topic"
+    type: "categorical"
+    values:
+      - "how a toilet flushes"
+      - "the Riemann hypothesis"
+      - "why the sky is blue"
+
+  - name: "audience"
+    type: "categorical"
+    values:
+      - "6-year-old children"
+      - "college freshmen"
+      - "PhD researchers in the field"
+
+  - name: "sentence_count"
+    type: "continuous"
+    distribution: "uniform"
+    params:
+      low: 2
+      high: 15
