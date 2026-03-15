@@ -103,11 +103,16 @@ class ReportGenerator:
             oracle_data = {}
             scores = np.array([r.evaluations[oracle_name].score for r in self.results])
 
-            # Posterior KDE
-            mean = analysis["population_mean"]
-            hdi_width = analysis["hdi_upper"] - analysis["hdi_lower"]
-            std_approx = hdi_width / 3.3
-            posterior_samples = np.random.normal(mean, std_approx, 4000)
+            # Posterior KDE — use real MCMC samples when available
+            if "posterior_samples" in analysis:
+                posterior_samples = np.array(analysis["posterior_samples"])
+            else:
+                # Fallback for legacy JSON files without trace data
+                mean = analysis["population_mean"]
+                hdi_width = analysis["hdi_upper"] - analysis["hdi_lower"]
+                std_approx = hdi_width / 3.3
+                rng = np.random.default_rng(42)
+                posterior_samples = rng.normal(mean, std_approx, 4000)
 
             kde = gaussian_kde(posterior_samples)
             x = np.linspace(
@@ -124,12 +129,17 @@ class ReportGenerator:
             oracle_data["histogram_counts"] = [int(c) for c in counts]
             oracle_data["score_mean"] = round(float(np.mean(scores)), 3)
 
-            # Noise KDE
-            noise_mean = analysis["oracle_noise_mean"]
-            noise_hdi = analysis["oracle_noise_hdi"]
-            noise_width = noise_hdi[1] - noise_hdi[0]
-            noise_std = max(noise_width / 3.3, 0.01)
-            noise_samples = np.abs(np.random.normal(noise_mean, noise_std, 4000))
+            # Noise KDE — use real MCMC samples when available
+            if "noise_posterior_samples" in analysis:
+                noise_samples = np.array(analysis["noise_posterior_samples"])
+            else:
+                # Fallback for legacy JSON files without trace data
+                noise_mean = analysis["oracle_noise_mean"]
+                noise_hdi = analysis["oracle_noise_hdi"]
+                noise_width = noise_hdi[1] - noise_hdi[0]
+                noise_std = max(noise_width / 3.3, 0.01)
+                rng = np.random.default_rng(43)
+                noise_samples = np.abs(rng.normal(noise_mean, noise_std, 4000))
 
             noise_kde = gaussian_kde(noise_samples)
             nx = np.linspace(
@@ -150,9 +160,15 @@ class ReportGenerator:
             oracle_data["population_median"] = round(
                 float(analysis["population_median"]), 4
             )
-            oracle_data["noise_mean"] = round(float(noise_mean), 4)
-            oracle_data["noise_hdi_lower"] = round(float(noise_hdi[0]), 4)
-            oracle_data["noise_hdi_upper"] = round(float(noise_hdi[1]), 4)
+            oracle_data["noise_mean"] = round(
+                float(analysis["oracle_noise_mean"]), 4
+            )
+            oracle_data["noise_hdi_lower"] = round(
+                float(analysis["oracle_noise_hdi"][0]), 4
+            )
+            oracle_data["noise_hdi_upper"] = round(
+                float(analysis["oracle_noise_hdi"][1]), 4
+            )
 
             # Score by Parameter — mean score per value of each axis
             cat_axes = [a for a in self.spec_config.axes if a.type == "categorical"]

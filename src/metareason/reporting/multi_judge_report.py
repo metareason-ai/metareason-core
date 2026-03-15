@@ -127,14 +127,19 @@ class MultiJudgeReportGenerator:
 
         chart_data["histogram_labels"] = ["1", "2", "3", "4", "5"]
 
-        # Per-judge bias posterior KDEs
+        # Per-judge bias posterior KDEs — use real MCMC samples when available
         chart_data["bias_posteriors"] = {}
         for name, info in self.multi_judge["judges"].items():
-            bias_mean = info["bias_mean"]
-            bias_lo, bias_hi = info["bias_hdi"]
-            bias_width = bias_hi - bias_lo
-            bias_std = max(bias_width / 3.3, 0.01)
-            samples = np.random.normal(bias_mean, bias_std, 4000)
+            if "bias_posterior_samples" in info:
+                samples = np.array(info["bias_posterior_samples"])
+            else:
+                # Fallback for legacy data without trace samples
+                bias_mean = info["bias_mean"]
+                bias_lo, bias_hi = info["bias_hdi"]
+                bias_width = bias_hi - bias_lo
+                bias_std = max(bias_width / 3.3, 0.01)
+                rng = np.random.default_rng(42)
+                samples = rng.normal(bias_mean, bias_std, 4000)
 
             kde = gaussian_kde(samples)
             x = np.linspace(samples.min() - 0.3, samples.max() + 0.3, 60)
@@ -142,19 +147,24 @@ class MultiJudgeReportGenerator:
             chart_data["bias_posteriors"][name] = {
                 "x": [round(float(v), 4) for v in x],
                 "y": [round(float(v), 4) for v in y],
-                "mean": round(float(bias_mean), 4),
-                "hdi_lower": round(float(bias_lo), 4),
-                "hdi_upper": round(float(bias_hi), 4),
+                "mean": round(float(info["bias_mean"]), 4),
+                "hdi_lower": round(float(info["bias_hdi"][0]), 4),
+                "hdi_upper": round(float(info["bias_hdi"][1]), 4),
             }
 
-        # Per-judge noise posterior KDEs
+        # Per-judge noise posterior KDEs — use real MCMC samples when available
         chart_data["noise_posteriors"] = {}
         for name, info in self.multi_judge["judges"].items():
-            noise_mean = info["noise_mean"]
-            noise_lo, noise_hi = info["noise_hdi"]
-            noise_width = noise_hi - noise_lo
-            noise_std = max(noise_width / 3.3, 0.01)
-            samples = np.abs(np.random.normal(noise_mean, noise_std, 4000))
+            if "noise_posterior_samples" in info:
+                samples = np.array(info["noise_posterior_samples"])
+            else:
+                # Fallback for legacy data without trace samples
+                noise_mean = info["noise_mean"]
+                noise_lo, noise_hi = info["noise_hdi"]
+                noise_width = noise_hi - noise_lo
+                noise_std = max(noise_width / 3.3, 0.01)
+                rng = np.random.default_rng(43)
+                samples = np.abs(rng.normal(noise_mean, noise_std, 4000))
 
             kde = gaussian_kde(samples)
             x = np.linspace(max(0, samples.min() - 0.1), samples.max() + 0.1, 60)
@@ -162,9 +172,9 @@ class MultiJudgeReportGenerator:
             chart_data["noise_posteriors"][name] = {
                 "x": [round(float(v), 4) for v in x],
                 "y": [round(float(v), 4) for v in y],
-                "mean": round(float(noise_mean), 4),
-                "hdi_lower": round(float(noise_lo), 4),
-                "hdi_upper": round(float(noise_hi), 4),
+                "mean": round(float(info["noise_mean"]), 4),
+                "hdi_lower": round(float(info["noise_hdi"][0]), 4),
+                "hdi_upper": round(float(info["noise_hdi"][1]), 4),
             }
 
         chart_data["has_expected"] = has_expected
