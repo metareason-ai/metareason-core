@@ -276,7 +276,13 @@ def metareason():
     is_flag=True,
     help="Generate HTML report after analysis",
 )
-def run(spec, output, analyze, report):
+@click.option(
+    "--db",
+    type=click.Path(),
+    default=None,
+    help="SQLite database path to store run data (e.g. runs.db)",
+)
+def run(spec, output, analyze, report, db):
     """Run an evaluation based on a specification file."""
     try:
         spec_path = Path(spec)
@@ -307,6 +313,50 @@ def run(spec, output, analyze, report):
         console.print(
             f"\n[bold green]✓ Completed {len(responses)} evaluations[/bold green]\n"
         )
+
+        # Initialize DB storage if requested
+        store = None
+        run_id = None
+        if db:
+            from ..storage import RunStore
+
+            store = RunStore(db)
+            run_id = store.start_run(
+                spec_id=spec_config.spec_id,
+                n_variants=len(responses),
+                n_oracles=len(spec_config.oracles),
+            )
+            # Save pipeline stage configs
+            stages = [
+                {
+                    "model": stage.model,
+                    "adapter": stage.adapter.name,
+                    "temperature": stage.temperature,
+                    "top_p": stage.top_p,
+                    "max_tokens": stage.max_tokens,
+                }
+                for stage in spec_config.pipeline
+            ]
+            store.save_pipeline_stages(run_id, stages)
+
+            # Save every sample + evaluations
+            for i, response in enumerate(responses):
+                evals = {
+                    name: {
+                        "score": ev.score,
+                        "explanation": ev.explanation,
+                    }
+                    for name, ev in response.evaluations.items()
+                }
+                store.save_sample(
+                    run_id=run_id,
+                    sample_index=i,
+                    sample_params=response.sample_params,
+                    original_prompt=response.original_prompt,
+                    final_response=response.final_response,
+                    evaluations=evals,
+                )
+            console.print(f"[green]✓ Saved {len(responses)} samples to {db}[/green]")
 
         # Display results
         for i, response in enumerate(responses, 1):
@@ -410,7 +460,22 @@ def run(spec, output, analyze, report):
             generator.generate_html(report_path)
             console.print(f"[green]✓ HTML report saved to {report_path}[/green]")
 
+        # Save analysis to DB and finalize run
+        if store and run_id is not None:
+            if analyze and "analysis_results" in locals() and analysis_results:
+                for oracle_name, pop_result in analysis_results.items():
+                    store.save_analysis(run_id, oracle_name, pop_result)
+                console.print(
+                    f"[green]✓ Analysis results saved to {db}[/green]"
+                )
+            store.finish_run(run_id)
+            store.close()
+
     except Exception as e:
+        # Mark run as failed if DB is active
+        if "store" in locals() and store and "run_id" in locals() and run_id:
+            store.finish_run(run_id, status="failed")
+            store.close()
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise
 
@@ -1139,6 +1204,123 @@ def calibrate_multi(spec, output, report):
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise
+
+
+@metareason.group()
+@click.argument("db_path", type=click.Path(exists=True))
+@click.pass_context
+def db(ctx, db_path):
+    """Query and export data from a run database."""
+    from ..storage import RunStore
+
+    ctx.ensure_object(dict)
+    ctx.obj["store"] = RunStore(db_path)
+
+
+@db.command(name="runs")
+@click.option("--limit", "-n", default=20, help="Number of runs to show")
+@click.pass_context
+def db_runs(ctx, limit):
+    """List recent runs."""
+    store = ctx.obj["store"]
+    runs = store.list_runs(limit=limit)
+    if not runs:
+        console.print("[dim]No runs found.[/dim]")
+        return
+
+    table = Table(title="Recent Runs")
+    table.add_column("ID", justify="right", style="cyan")
+    table.add_column("Spec ID")
+    table.add_column("Started")
+    table.add_column("Status")
+    table.add_column("Variants", justify="right")
+    table.add_column("Oracles", justify="right")
+
+    for r in runs:
+        status_style = {
+            "completed": "green",
+            "running": "yellow",
+            "failed": "red",
+        }.get(r["status"], "dim")
+        table.add_row(
+            str(r["id"]),
+            r["spec_id"],
+            r["started_at"][:19],
+            f"[{status_style}]{r['status']}[/{status_style}]",
+            str(r["n_variants"] or ""),
+            str(r["n_oracles"] or ""),
+        )
+
+    console.print(table)
+    store.close()
+
+
+@db.command(name="scores")
+@click.argument("run_id", type=int)
+@click.option("--oracle", "-o", default=None, help="Filter by oracle name")
+@click.pass_context
+def db_scores(ctx, run_id, oracle):
+    """Show scores for a run."""
+    store = ctx.obj["store"]
+    scores = store.get_scores(run_id, oracle_name=oracle)
+    if not scores:
+        console.print(f"[dim]No scores found for run {run_id}.[/dim]")
+        return
+
+    table = Table(title=f"Scores for Run #{run_id}")
+    table.add_column("Sample", justify="right", style="cyan")
+    table.add_column("Oracle")
+    table.add_column("Score", justify="right", style="yellow")
+
+    for s in scores:
+        table.add_row(
+            str(s["sample_index"]),
+            s["oracle_name"],
+            f"{s['score']:.2f}",
+        )
+
+    console.print(table)
+    store.close()
+
+
+@db.command(name="export")
+@click.option("--run-id", "-r", type=int, default=None, help="Filter to a run")
+@click.option(
+    "--min-score", "-s", type=float, default=4.0, help="Minimum score threshold"
+)
+@click.option("--oracle", "-o", default=None, help="Filter by oracle name")
+@click.option("--output", "-f", default=None, help="Output JSONL file path")
+@click.pass_context
+def db_export(ctx, run_id, min_score, oracle, output):
+    """Export high-quality prompt/response pairs for fine-tuning."""
+    store = ctx.obj["store"]
+    pairs = store.export_for_finetuning(
+        run_id=run_id, min_score=min_score, oracle_name=oracle
+    )
+
+    if not pairs:
+        console.print("[dim]No pairs match the criteria.[/dim]")
+        return
+
+    console.print(f"[green]Found {len(pairs)} pairs with score >= {min_score}[/green]")
+
+    if output:
+        from pathlib import Path
+
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w") as f:
+            for pair in pairs:
+                f.write(json.dumps(pair) + "\n")
+        console.print(f"[green]✓ Exported to {output_path}[/green]")
+    else:
+        for pair in pairs:
+            console.print(
+                f"[cyan]Score {pair['score']:.1f}[/cyan] ({pair['oracle_name']}): "
+                f"{pair['prompt'][:80]}..."
+            )
+
+    store.close()
 
 
 if __name__ == "__main__":
