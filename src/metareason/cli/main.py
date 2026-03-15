@@ -284,6 +284,8 @@ def metareason():
 )
 def run(spec, output, analyze, report, db):
     """Run an evaluation based on a specification file."""
+    store = None
+    analysis_results = None
     try:
         spec_path = Path(spec)
 
@@ -315,7 +317,6 @@ def run(spec, output, analyze, report, db):
         )
 
         # Initialize DB storage if requested
-        store = None
         if db:
             from ..storage import RunStore
 
@@ -402,7 +403,7 @@ def run(spec, output, analyze, report, db):
         console.print(f"\n[green]✓ Results saved to {output_path}[/green]")
 
         # Save analysis results if they exist
-        if analyze and "analysis_results" in locals():
+        if analyze and analysis_results is not None:
             for oracle_name, pop_result in analysis_results.items():
                 # Save population quality results as JSON
                 analysis_path = output_path.with_suffix("").with_suffix(
@@ -415,7 +416,7 @@ def run(spec, output, analyze, report, db):
                 )
 
         # Generate HTML report if requested
-        if report and analyze and "analysis_results" in locals() and analysis_results:
+        if report and analyze and analysis_results is not None and analysis_results:
             from ..reporting import ReportGenerator
 
             generator = ReportGenerator(responses, spec_config, analysis_results)
@@ -437,7 +438,7 @@ def run(spec, output, analyze, report, db):
             ]
             db_analysis = (
                 analysis_results
-                if analyze and "analysis_results" in locals()
+                if analyze and analysis_results is not None
                 else None
             )
             store.save_run_results(
@@ -450,7 +451,6 @@ def run(spec, output, analyze, report, db):
             console.print(
                 f"[green]✓ Run data saved to {db}[/green]"
             )
-            store.close()
 
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
@@ -1282,7 +1282,7 @@ def db_export(ctx, run_id, min_score, oracle, output, fmt):
     """Export high-quality prompt/response pairs for fine-tuning."""
     store = ctx.obj["store"]
     pairs = store.export_for_finetuning(
-        run_id=run_id, min_score=min_score, oracle_name=oracle, format=fmt
+        run_id=run_id, min_score=min_score, oracle_name=oracle, fmt=fmt
     )
 
     if not pairs:

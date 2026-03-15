@@ -326,7 +326,7 @@ class TestExportForFinetuning:
 
     def test_export_openai_format(self, store):
         self._populate(store)
-        pairs = store.export_for_finetuning(min_score=5.0, format="openai")
+        pairs = store.export_for_finetuning(min_score=5.0, fmt="openai")
         assert len(pairs) == 1
         p = pairs[0]
         assert "messages" in p
@@ -336,12 +336,52 @@ class TestExportForFinetuning:
 
     def test_export_messages_format(self, store):
         self._populate(store)
-        pairs = store.export_for_finetuning(min_score=5.0, format="messages")
+        pairs = store.export_for_finetuning(min_score=5.0, fmt="messages")
         assert len(pairs) == 1
         p = pairs[0]
         assert "messages" in p
         assert "prompt" in p
         assert "scores" in p
+
+    def test_export_with_oracle_name_filter(self, store):
+        """When oracle_name is specified, only that oracle's scores appear."""
+        run_id = store.start_run("test", n_variants=1, n_oracles=2)
+        store.save_sample(
+            run_id=run_id,
+            sample_index=0,
+            sample_params={},
+            original_prompt="Prompt",
+            final_response="Response",
+            evaluations={
+                "judge_a": {"score": 5.0},
+                "judge_b": {"score": 2.0},
+            },
+        )
+
+        # Filter by judge_a -- should qualify and only show judge_a's score
+        pairs = store.export_for_finetuning(oracle_name="judge_a", min_score=4.0)
+        assert len(pairs) == 1
+        assert "judge_a" in pairs[0]["scores"]
+        assert "judge_b" not in pairs[0]["scores"]
+
+    def test_export_oracle_filter_excludes_non_qualifying(self, store):
+        """When filtering by oracle, samples not meeting threshold are excluded."""
+        run_id = store.start_run("test", n_variants=1, n_oracles=2)
+        store.save_sample(
+            run_id=run_id,
+            sample_index=0,
+            sample_params={},
+            original_prompt="Prompt",
+            final_response="Response",
+            evaluations={
+                "judge_a": {"score": 2.0},
+                "judge_b": {"score": 5.0},
+            },
+        )
+
+        # Filter by judge_a with min_score=4.0 -- judge_a scored 2.0, shouldn't qualify
+        pairs = store.export_for_finetuning(oracle_name="judge_a", min_score=4.0)
+        assert len(pairs) == 0
 
 
 class TestSaveRunResults:
@@ -399,13 +439,9 @@ class TestSaveRunResults:
                 pipeline_stages=bad_stages,
             )
 
-        # The run was created via start_run (committed),
-        # but pipeline_stages+samples should have been rolled back
+        # Entire transaction rolled back -- no run, no samples
         runs = store.list_runs()
-        assert len(runs) == 1
-        # No samples saved
-        samples = store.get_samples(runs[0]["id"])
-        assert len(samples) == 0
+        assert len(runs) == 0
 
 
 class TestConnectionLifecycle:

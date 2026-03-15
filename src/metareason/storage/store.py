@@ -8,6 +8,7 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Protocol, runtime_checkable
 
 
 _SCHEMA_VERSION = 1
@@ -46,7 +47,8 @@ CREATE TABLE IF NOT EXISTS samples (
     sample_index INTEGER NOT NULL,
     sample_params TEXT NOT NULL,
     original_prompt TEXT NOT NULL,
-    final_response TEXT NOT NULL
+    final_response TEXT NOT NULL,
+    UNIQUE(run_id, sample_index)
 );
 
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -54,7 +56,8 @@ CREATE TABLE IF NOT EXISTS evaluations (
     sample_id INTEGER NOT NULL REFERENCES samples(id),
     oracle_name TEXT NOT NULL,
     score REAL NOT NULL,
-    explanation TEXT
+    explanation TEXT,
+    UNIQUE(sample_id, oracle_name)
 );
 
 CREATE TABLE IF NOT EXISTS analysis_results (
@@ -72,6 +75,16 @@ CREATE INDEX IF NOT EXISTS idx_evaluations_oracle ON evaluations(oracle_name);
 CREATE INDEX IF NOT EXISTS idx_analysis_run_id ON analysis_results(run_id);
 CREATE INDEX IF NOT EXISTS idx_pipeline_run_id ON pipeline_stages(run_id);
 """
+
+
+@runtime_checkable
+class SampleResultLike(Protocol):
+    """Protocol for objects accepted by save_run_results."""
+
+    sample_params: dict
+    original_prompt: str
+    final_response: str
+    evaluations: dict[str, Any]
 
 
 class RunStore:
@@ -121,10 +134,15 @@ class RunStore:
             self._conn = None
         self._closed = True
 
-    def __enter__(self):
+    def __enter__(self) -> "RunStore":
         return self
 
-    def __exit__(self, *exc):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
         self.close()
 
     # ── High-level API ──────────────────────────────────────────────
@@ -132,7 +150,7 @@ class RunStore:
     def save_run_results(
         self,
         spec_id: str,
-        results: list,
+        results: list[SampleResultLike],
         pipeline_stages: list[dict],
         spec_yaml: str | None = None,
         analysis_results: dict | None = None,
@@ -140,8 +158,8 @@ class RunStore:
         """Save a complete run from domain objects in a single transaction.
 
         This is the preferred entry point for persisting pipeline results.
-        Accepts SampleResult objects (or any object with sample_params,
-        original_prompt, final_response, and evaluations attributes).
+        Everything -- run record, pipeline stages, samples, evaluations,
+        analysis, and status update -- is committed atomically.
 
         Args:
             spec_id: The spec identifier.
@@ -153,15 +171,25 @@ class RunStore:
         Returns:
             The run ID.
         """
-        run_id = self.start_run(
-            spec_id=spec_id,
-            n_variants=len(results),
-            n_oracles=len(results[0].evaluations) if results else 0,
-            spec_yaml=spec_yaml,
-        )
-
         conn = self._get_conn()
+        now = datetime.now(timezone.utc).isoformat()
+
         try:
+            # Create run record
+            cur = conn.execute(
+                """INSERT INTO runs (spec_id, started_at, n_variants, n_oracles,
+                                    status, spec_yaml, metadata)
+                   VALUES (?, ?, ?, ?, 'running', ?, NULL)""",
+                (
+                    spec_id,
+                    now,
+                    len(results),
+                    len(results[0].evaluations) if results else 0,
+                    spec_yaml,
+                ),
+            )
+            run_id = cur.lastrowid
+
             # Pipeline stages
             for i, stage in enumerate(pipeline_stages):
                 conn.execute(
@@ -202,7 +230,6 @@ class RunStore:
 
             # Analysis results
             if analysis_results:
-                now = datetime.now(timezone.utc).isoformat()
                 for oracle_name, result_dict in analysis_results.items():
                     conn.execute(
                         """INSERT INTO analysis_results
@@ -211,13 +238,17 @@ class RunStore:
                         (run_id, oracle_name, json.dumps(result_dict), now),
                     )
 
+            # Mark completed within the same transaction
+            conn.execute(
+                "UPDATE runs SET finished_at = ?, status = 'completed' WHERE id = ?",
+                (datetime.now(timezone.utc).isoformat(), run_id),
+            )
+
             conn.commit()
+            return run_id
         except Exception:
             conn.rollback()
             raise
-
-        self.finish_run(run_id)
-        return run_id
 
     # ── Low-level write operations ────────────────────────────────────
 
@@ -314,7 +345,7 @@ class RunStore:
             conn.rollback()
             raise
 
-    def finish_run(self, run_id: int, status: str = "completed"):
+    def finish_run(self, run_id: int, status: str = "completed") -> None:
         """Mark a run as finished."""
         conn = self._get_conn()
         conn.execute(
@@ -329,7 +360,7 @@ class RunStore:
         oracle_name: str,
         result: dict,
         analysis_type: str = "population_quality",
-    ):
+    ) -> None:
         """Save analysis results for a run/oracle."""
         conn = self._get_conn()
         conn.execute(
@@ -448,19 +479,19 @@ class RunStore:
         run_id: int | None = None,
         min_score: float = 4.0,
         oracle_name: str | None = None,
-        format: str = "raw",
+        fmt: str = "raw",
     ) -> list[dict]:
         """Export unique prompt/response pairs for fine-tuning.
 
         Returns one entry per sample where at least one matching oracle
-        scored >= min_score. Each entry includes all qualifying oracle
-        scores to avoid duplicate training examples.
+        scored >= min_score. When oracle_name is specified, only that
+        oracle's scores appear in the output.
 
         Args:
             run_id: Filter to a specific run. If None, searches all runs.
             min_score: Minimum score threshold for inclusion.
             oracle_name: Filter to a specific oracle's scores.
-            format: Output format -- "raw" (default), "openai" (chat completions),
+            fmt: Output format -- "raw" (default), "openai" (chat completions),
                 or "messages" (generic chat format).
         """
         conn = self._get_conn()
@@ -488,17 +519,30 @@ class RunStore:
         if not sample_ids:
             return []
 
-        # Fetch full sample + evaluation data for qualifying samples
+        # Fetch sample + evaluation data for qualifying samples
+        # When oracle_name is specified, only include that oracle's scores
         placeholders = ",".join("?" * len(sample_ids))
-        rows = conn.execute(
-            f"""SELECT s.id, s.original_prompt, s.final_response, s.sample_params,
+        if oracle_name is not None:
+            # Safe: placeholders is only "?" chars and commas
+            detail_query = f"""
+                SELECT s.id, s.original_prompt, s.final_response, s.sample_params,
+                       e.oracle_name, e.score
+                FROM samples s
+                JOIN evaluations e ON e.sample_id = s.id
+                WHERE s.id IN ({placeholders}) AND e.oracle_name = ?
+                ORDER BY s.id, e.score DESC"""
+            detail_params = sample_ids + [oracle_name]
+        else:
+            detail_query = f"""
+                SELECT s.id, s.original_prompt, s.final_response, s.sample_params,
                        e.oracle_name, e.score
                 FROM samples s
                 JOIN evaluations e ON e.sample_id = s.id
                 WHERE s.id IN ({placeholders})
-                ORDER BY s.id, e.score DESC""",
-            sample_ids,
-        ).fetchall()
+                ORDER BY s.id, e.score DESC"""
+            detail_params = sample_ids
+
+        rows = conn.execute(detail_query, detail_params).fetchall()
 
         # Group by sample to produce one entry per unique prompt/response
         samples: dict[int, dict] = {}
@@ -519,7 +563,7 @@ class RunStore:
             reverse=True,
         )
 
-        if format == "openai":
+        if fmt == "openai":
             return [
                 {
                     "messages": [
@@ -529,7 +573,7 @@ class RunStore:
                 }
                 for s in result
             ]
-        elif format == "messages":
+        elif fmt == "messages":
             return [
                 {
                     "prompt": s["prompt"],
