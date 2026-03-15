@@ -12,12 +12,12 @@ from metareason.reporting.report_generator import _load_vendor_asset
 
 
 class CalibrationReportGenerator:
-    """Generates self-contained HTML reports from calibration results.
+    """Generates self-contained HTML reports from judge calibration results.
 
     Args:
         config: CalibrateConfig used for the calibration.
         scores: List of raw scores from repeated evaluations.
-        analysis_result: Dict from BayesianAnalyzer.estimate_population_quality().
+        analysis_result: Dict from BayesianAnalyzer.estimate_judge_calibration().
     """
 
     def __init__(
@@ -52,16 +52,37 @@ class CalibrationReportGenerator:
         if self.config.analysis:
             hdi_prob = self.config.analysis.hdi_probability
 
-        has_expected = self.config.expected_score is not None
-        bias = None
-        within_hdi = None
+        has_expected = "expected_score" in self.analysis
+
+        # Build verdict
+        noise = self.analysis["noise_mean"]
         if has_expected:
-            bias = self.analysis["population_mean"] - self.config.expected_score
-            within_hdi = (
-                self.analysis["hdi_lower"]
-                <= self.config.expected_score
-                <= self.analysis["hdi_upper"]
-            )
+            abs_bias = abs(self.analysis["bias_mean"])
+            direction = "higher" if self.analysis["bias_mean"] > 0 else "lower"
+            if abs_bias < 0.2 and noise < 0.2:
+                verdict = "Well-calibrated. Accurate and consistent."
+                verdict_class = "good"
+            elif abs_bias >= 0.2 and noise < 0.2:
+                verdict = (
+                    f"Consistently {direction}. "
+                    f"Usable if you adjust by ~{self.analysis['bias_mean']:+.2f}."
+                )
+                verdict_class = "warn"
+            elif abs_bias < 0.2 and noise >= 0.2:
+                verdict = (
+                    "Accurate on average but inconsistent. "
+                    "Consider more repeats or lower temperature."
+                )
+                verdict_class = "warn"
+            else:
+                verdict = (
+                    f"Both biased ({self.analysis['bias_mean']:+.2f}) and noisy "
+                    f"(±{noise:.1f}). Consider a different judge."
+                )
+                verdict_class = "bad"
+        else:
+            verdict = None
+            verdict_class = None
 
         return {
             "title": f"MetaReason Calibration Report: {self.config.spec_id}",
@@ -78,29 +99,33 @@ class CalibrationReportGenerator:
             "prompt": self.config.prompt,
             "response": self.config.response,
             "has_expected": has_expected,
-            "expected_score": self.config.expected_score,
-            "bias": bias,
-            "within_hdi": within_hdi,
+            "expected_score": self.analysis.get("expected_score"),
+            "verdict": verdict,
+            "verdict_class": verdict_class,
         }
 
     def _generate_chart_data(self) -> dict:
         """Generate JSON-serializable chart data for Chart.js."""
         chart_data = {}
         scores = np.array(self.scores)
+        has_expected = "expected_score" in self.analysis
 
-        # Posterior KDE
-        mean = self.analysis["population_mean"]
-        hdi_width = self.analysis["hdi_upper"] - self.analysis["hdi_lower"]
-        std_approx = hdi_width / 3.3
-        posterior_samples = np.random.normal(mean, std_approx, 4000)
+        if has_expected:
+            # Bias posterior KDE
+            bias_mean = self.analysis["bias_mean"]
+            bias_lo, bias_hi = self.analysis["bias_hdi"]
+            bias_width = bias_hi - bias_lo
+            bias_std = max(bias_width / 3.3, 0.01)
+            bias_samples = np.random.normal(bias_mean, bias_std, 4000)
 
-        kde = gaussian_kde(posterior_samples)
-        x = np.linspace(
-            posterior_samples.min() - 0.5, posterior_samples.max() + 0.5, 80
-        )
-        y = kde(x)
-        chart_data["posterior_x"] = [round(float(v), 4) for v in x]
-        chart_data["posterior_y"] = [round(float(v), 4) for v in y]
+            kde = gaussian_kde(bias_samples)
+            x = np.linspace(bias_samples.min() - 0.5, bias_samples.max() + 0.5, 80)
+            y = kde(x)
+            chart_data["bias_x"] = [round(float(v), 4) for v in x]
+            chart_data["bias_y"] = [round(float(v), 4) for v in y]
+            chart_data["bias_mean"] = round(float(bias_mean), 4)
+            chart_data["bias_hdi_lower"] = round(float(bias_lo), 4)
+            chart_data["bias_hdi_upper"] = round(float(bias_hi), 4)
 
         # Score histogram
         bins = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]
@@ -110,9 +135,9 @@ class CalibrationReportGenerator:
         chart_data["score_mean"] = round(float(np.mean(scores)), 3)
 
         # Noise KDE
-        noise_mean = self.analysis["oracle_noise_mean"]
-        noise_hdi = self.analysis["oracle_noise_hdi"]
-        noise_width = noise_hdi[1] - noise_hdi[0]
+        noise_mean = self.analysis["noise_mean"]
+        noise_lo, noise_hi = self.analysis["noise_hdi"]
+        noise_width = noise_hi - noise_lo
         noise_std = max(noise_width / 3.3, 0.01)
         noise_samples = np.abs(np.random.normal(noise_mean, noise_std, 4000))
 
@@ -125,19 +150,11 @@ class CalibrationReportGenerator:
         ny = noise_kde(nx)
         chart_data["noise_x"] = [round(float(v), 4) for v in nx]
         chart_data["noise_y"] = [round(float(v), 4) for v in ny]
-
-        # Analysis values for chart annotations
-        chart_data["hdi_lower"] = round(float(self.analysis["hdi_lower"]), 4)
-        chart_data["hdi_upper"] = round(float(self.analysis["hdi_upper"]), 4)
-        chart_data["population_mean"] = round(
-            float(self.analysis["population_mean"]), 4
-        )
-        chart_data["population_median"] = round(
-            float(self.analysis["population_median"]), 4
-        )
         chart_data["noise_mean"] = round(float(noise_mean), 4)
-        chart_data["noise_hdi_lower"] = round(float(noise_hdi[0]), 4)
-        chart_data["noise_hdi_upper"] = round(float(noise_hdi[1]), 4)
+        chart_data["noise_hdi_lower"] = round(float(noise_lo), 4)
+        chart_data["noise_hdi_upper"] = round(float(noise_hi), 4)
+
+        chart_data["has_expected"] = has_expected
 
         return chart_data
 

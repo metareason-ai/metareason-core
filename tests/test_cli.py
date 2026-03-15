@@ -86,6 +86,29 @@ def mock_population_quality():
     }
 
 
+def mock_judge_calibration(expected_score=None):
+    result = {
+        "noise_mean": 0.3,
+        "noise_hdi": (0.1, 0.5),
+        "n_samples": 5,
+        "hdi_prob": 0.94,
+        "raw_score_mean": 4.0,
+        "raw_score_std": 0.3,
+    }
+    if expected_score is not None:
+        result["expected_score"] = expected_score
+        result["bias_mean"] = 4.0 - expected_score
+        result["bias_median"] = 4.0 - expected_score
+        result["bias_hdi"] = (
+            4.0 - expected_score - 0.2,
+            4.0 - expected_score + 0.2,
+        )
+    else:
+        result["estimated_quality_mean"] = 4.0
+        result["estimated_quality_hdi"] = (3.5, 4.5)
+    return result
+
+
 @pytest.fixture
 def cli_runner():
     return CliRunner()
@@ -500,16 +523,13 @@ class TestCalibrateCommand:
         mock_judge_class.return_value = mock_judge
 
         mock_analyzer = MagicMock()
-        mock_analyzer.estimate_population_quality.return_value = (
-            mock_population_quality()
-        )
+        mock_analyzer.estimate_judge_calibration.return_value = mock_judge_calibration()
         mock_analyzer_class.return_value = mock_analyzer
 
         result = cli_runner.invoke(metareason, ["calibrate", str(spec_file)])
 
         assert result.exit_code == 0
         assert "Judge Calibration" in result.output
-        assert "confident" in result.output
         assert mock_judge.evaluate.call_count == 5
 
     @patch("metareason.cli.main.BayesianAnalyzer")
@@ -527,8 +547,8 @@ class TestCalibrateCommand:
         mock_judge_class.return_value = mock_judge
 
         mock_analyzer = MagicMock()
-        mock_analyzer.estimate_population_quality.return_value = (
-            mock_population_quality()
+        mock_analyzer.estimate_judge_calibration.return_value = mock_judge_calibration(
+            expected_score=4.0
         )
         mock_analyzer_class.return_value = mock_analyzer
 
@@ -536,7 +556,7 @@ class TestCalibrateCommand:
 
         assert result.exit_code == 0
         assert "Accuracy" in result.output
-        assert "Bias" in result.output
+        assert "Error" in result.output
 
     @patch("metareason.cli.main.BayesianAnalyzer")
     @patch("metareason.cli.main.LLMJudge")
@@ -554,9 +574,7 @@ class TestCalibrateCommand:
         mock_judge_class.return_value = mock_judge
 
         mock_analyzer = MagicMock()
-        mock_analyzer.estimate_population_quality.return_value = (
-            mock_population_quality()
-        )
+        mock_analyzer.estimate_judge_calibration.return_value = mock_judge_calibration()
         mock_analyzer_class.return_value = mock_analyzer
 
         result = cli_runner.invoke(
@@ -610,9 +628,7 @@ class TestCalibrateCommand:
         mock_judge_class.return_value = mock_judge
 
         mock_analyzer = MagicMock()
-        mock_analyzer.estimate_population_quality.return_value = (
-            mock_population_quality()
-        )
+        mock_analyzer.estimate_judge_calibration.return_value = mock_judge_calibration()
         mock_analyzer_class.return_value = mock_analyzer
 
         result = cli_runner.invoke(metareason, ["calibrate", str(spec_file)])
@@ -636,9 +652,7 @@ class TestCalibrateCommand:
         mock_judge_class.return_value = mock_judge
 
         mock_analyzer = MagicMock()
-        mock_analyzer.estimate_population_quality.return_value = (
-            mock_population_quality()
-        )
+        mock_analyzer.estimate_judge_calibration.return_value = mock_judge_calibration()
         mock_analyzer_class.return_value = mock_analyzer
 
         with patch(
@@ -672,9 +686,7 @@ class TestCalibrateCommand:
         mock_judge_class.return_value = mock_judge
 
         mock_analyzer = MagicMock()
-        mock_analyzer.estimate_population_quality.return_value = (
-            mock_population_quality()
-        )
+        mock_analyzer.estimate_judge_calibration.return_value = mock_judge_calibration()
         mock_analyzer_class.return_value = mock_analyzer
 
         with patch(
@@ -1076,3 +1088,302 @@ axes:
 
         mock_analyzer.estimate_parameter_effects.assert_not_called()
         assert "parameter_effects" not in analysis_results["coherence_judge"]
+
+
+# --- calibrate-multi command ---
+
+VALID_CALIBRATE_MULTI_YAML = """\
+spec_id: "multi-test"
+type: calibrate_multi
+prompt: "Test prompt"
+response: "Test response"
+repeats: 3
+oracles:
+  judge_a:
+    type: "llm_judge"
+    model: "model-a"
+    adapter:
+      name: "ollama"
+    rubric: "Rate 1-5"
+  judge_b:
+    type: "llm_judge"
+    model: "model-b"
+    adapter:
+      name: "ollama"
+    rubric: "Rate 1-5"
+analysis:
+  hdi_probability: 0.94
+  mcmc_draws: 200
+  mcmc_chains: 2
+  mcmc_tune: 100
+"""
+
+
+def mock_multi_judge_result():
+    return {
+        "true_quality_mean": 3.8,
+        "true_quality_median": 3.9,
+        "true_quality_std": 0.2,
+        "hdi_lower": 3.4,
+        "hdi_upper": 4.2,
+        "hdi_prob": 0.94,
+        "judges": {
+            "judge_a": {
+                "bias_mean": 0.1,
+                "bias_hdi": (-0.2, 0.4),
+                "noise_mean": 0.3,
+                "noise_hdi": (0.1, 0.5),
+                "consistency_weight": 0.6,
+                "n_evaluations": 3,
+                "raw_score_mean": 3.9,
+                "raw_score_std": 0.3,
+            },
+            "judge_b": {
+                "bias_mean": -0.1,
+                "bias_hdi": (-0.3, 0.1),
+                "noise_mean": 0.4,
+                "noise_hdi": (0.2, 0.6),
+                "consistency_weight": 0.4,
+                "n_evaluations": 3,
+                "raw_score_mean": 3.7,
+                "raw_score_std": 0.4,
+            },
+        },
+        "bias_corrected_weighted_score": 3.85,
+        "n_judges": 2,
+        "n_total_evaluations": 6,
+    }
+
+
+class TestCalibrateMultiCommand:
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_multi_basic(
+        self, mock_judge_class, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "multi.yaml"
+        spec_file.write_text(VALID_CALIBRATE_MULTI_YAML)
+
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(
+            return_value=EvaluationResult(score=4.0, explanation="good")
+        )
+        mock_judge_class.return_value = mock_judge
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_multi_judge_quality.return_value = (
+            mock_multi_judge_result()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = cli_runner.invoke(metareason, ["calibrate-multi", str(spec_file)])
+
+        assert result.exit_code == 0
+        assert "Multi-Judge Calibration" in result.output
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_multi_with_output(
+        self, mock_judge_class, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "multi.yaml"
+        spec_file.write_text(VALID_CALIBRATE_MULTI_YAML)
+        output_file = tmp_path / "multi_results.json"
+
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(
+            return_value=EvaluationResult(score=4.0, explanation="good")
+        )
+        mock_judge_class.return_value = mock_judge
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_multi_judge_quality.return_value = (
+            mock_multi_judge_result()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = cli_runner.invoke(
+            metareason,
+            ["calibrate-multi", str(spec_file), "-o", str(output_file)],
+        )
+
+        assert result.exit_code == 0
+        assert output_file.exists()
+
+        data = json.loads(output_file.read_text())
+        assert data["spec_id"] == "multi-test"
+        assert "multi_judge_analysis" in data
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_multi_with_report(
+        self, mock_judge_class, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "multi.yaml"
+        spec_file.write_text(VALID_CALIBRATE_MULTI_YAML)
+
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(
+            return_value=EvaluationResult(score=4.0, explanation="good")
+        )
+        mock_judge_class.return_value = mock_judge
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_multi_judge_quality.return_value = (
+            mock_multi_judge_result()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        with patch("metareason.reporting.MultiJudgeReportGenerator") as mock_report_gen:
+            mock_generator = MagicMock()
+            mock_report_gen.return_value = mock_generator
+
+            result = cli_runner.invoke(
+                metareason,
+                ["calibrate-multi", str(spec_file), "--report"],
+            )
+
+            assert result.exit_code == 0
+            assert "HTML report saved" in result.output
+            mock_report_gen.assert_called_once()
+            mock_generator.generate_html.assert_called_once()
+
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_multi_one_judge_fails_entirely(
+        self, mock_judge_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "multi.yaml"
+        spec_file.write_text(VALID_CALIBRATE_MULTI_YAML)
+
+        # Both judges fail
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(side_effect=RuntimeError("LLM unavailable"))
+        mock_judge_class.return_value = mock_judge
+
+        result = cli_runner.invoke(metareason, ["calibrate-multi", str(spec_file)])
+
+        assert result.exit_code == 0
+        assert "Fewer than 2 judges" in result.output
+
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.LLMJudge")
+    def test_calibrate_multi_partial_failures(
+        self, mock_judge_class, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        spec_file = tmp_path / "multi.yaml"
+        spec_file.write_text(VALID_CALIBRATE_MULTI_YAML)
+
+        # Judge succeeds 2/3, fails 1/3
+        mock_judge = MagicMock()
+        mock_judge.evaluate = AsyncMock(
+            side_effect=[
+                EvaluationResult(score=4.0, explanation="good"),
+                RuntimeError("timeout"),
+                EvaluationResult(score=3.5, explanation="ok"),
+                EvaluationResult(score=4.0, explanation="good"),
+                RuntimeError("timeout"),
+                EvaluationResult(score=3.5, explanation="ok"),
+            ]
+        )
+        mock_judge_class.return_value = mock_judge
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_multi_judge_quality.return_value = (
+            mock_multi_judge_result()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = cli_runner.invoke(metareason, ["calibrate-multi", str(spec_file)])
+
+        assert result.exit_code == 0
+        assert "Multi-Judge Calibration" in result.output
+
+
+# --- analyze --agreement flag ---
+
+
+MULTI_ORACLE_RESULTS_DATA = [
+    {
+        "sample_params": {"tone": "formal"},
+        "original_prompt": "test",
+        "final_response": "test response",
+        "evaluations": {
+            "judge_a": {"score": 4.0, "explanation": "good"},
+            "judge_b": {"score": 3.5, "explanation": "ok"},
+        },
+    },
+    {
+        "sample_params": {"tone": "casual"},
+        "original_prompt": "test",
+        "final_response": "test response",
+        "evaluations": {
+            "judge_a": {"score": 3.5, "explanation": "ok"},
+            "judge_b": {"score": 3.0, "explanation": "fair"},
+        },
+    },
+]
+
+MULTI_ORACLE_SPEC_YAML = """\
+spec_id: "test-multi"
+pipeline:
+  - template: "Hello {{ name }}"
+    adapter:
+      name: "ollama"
+    model: "test-model"
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 100
+sampling:
+  method: "latin_hypercube"
+  optimization: "maximin"
+n_variants: 2
+oracles:
+  judge_a:
+    type: "llm_judge"
+    model: "model-a"
+    adapter:
+      name: "ollama"
+    rubric: "Rate 1-5"
+  judge_b:
+    type: "llm_judge"
+    model: "model-b"
+    adapter:
+      name: "ollama"
+    rubric: "Rate 1-5"
+"""
+
+
+class TestAnalyzeAgreementFlag:
+    @patch("metareason.cli.main.BayesianAnalyzer")
+    @patch("metareason.cli.main.load_spec")
+    def test_agreement_flag_shows_metrics(
+        self, mock_load_spec, mock_analyzer_class, cli_runner, tmp_path
+    ):
+        from metareason.pipeline.loader import load_spec as real_load_spec
+
+        spec_file = tmp_path / "spec.yaml"
+        spec_file.write_text(MULTI_ORACLE_SPEC_YAML)
+        results_file = tmp_path / "results.json"
+        results_file.write_text(json.dumps(MULTI_ORACLE_RESULTS_DATA))
+
+        mock_load_spec.return_value = real_load_spec(spec_file)
+
+        mock_analyzer = MagicMock()
+        mock_analyzer.estimate_population_quality.return_value = (
+            mock_population_quality()
+        )
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = cli_runner.invoke(
+            metareason,
+            [
+                "analyze",
+                str(results_file),
+                "--spec",
+                str(spec_file),
+                "--agreement",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "alpha" in result.output.lower()

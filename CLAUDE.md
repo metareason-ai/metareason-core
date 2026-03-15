@@ -135,6 +135,7 @@ The project has the following structure:
 
 - **Review and suggest**: Provide code reviews, answer technical questions, and suggest best practices when asked
 - **No proactive coding**: Do not write implementation code unless explicitly requested
+- **No unrequested actions**: Do not take actions (file edits, code changes, refactors) the user hasn't asked for. Discuss first, act only when told to
 - **Explain and guide**: Focus on explaining concepts, pointing out issues, and providing guidance
 - **Keyboard-first workflow**: Support the user's goal of staying on the keyboard and minimizing mouse usage
 

@@ -218,6 +218,9 @@ class BayesianAnalysisConfig(BaseModel):
     # Prior for regression effect sizes
     prior_effect_sigma: float = Field(default=1.0, gt=0.0)
 
+    # Prior for judge bias in multi-judge models
+    prior_bias_sigma: float = Field(default=1.0, gt=0.0)
+
     # High-Density Interval (HDI) configuration
     hdi_probability: float = Field(default=0.94, gt=0.0, lt=1.0)
 
@@ -289,4 +292,21 @@ class CalibrateConfig(BaseModel):
     expected_score: Optional[float] = Field(default=None, ge=1.0, le=5.0)
     repeats: int = Field(default=30, ge=1)
     oracle: OracleConfig
+    analysis: Optional[BayesianAnalysisConfig] = None
+
+
+class CalibrateMultiConfig(BaseModel):
+    """Configuration for multi-judge calibration.
+
+    Measures agreement, bias, and reliability across multiple judges
+    by repeatedly evaluating a fixed prompt+response pair with each judge.
+    """
+
+    spec_id: str
+    type: Literal["calibrate_multi"] = "calibrate_multi"
+    prompt: str
+    response: str
+    expected_score: Optional[float] = Field(default=None, ge=1.0, le=5.0)
+    repeats: int = Field(default=30, ge=1)
+    oracles: Dict[str, OracleConfig] = Field(..., min_length=2)
     analysis: Optional[BayesianAnalysisConfig] = None
