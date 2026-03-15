@@ -407,3 +407,193 @@ class TestParameterEffects:
         assert abs(result["effects"][0]["effect_mean"]) >= abs(
             result["effects"][1]["effect_mean"]
         )
+
+
+# --- Multi-judge hierarchical model ---
+
+
+def make_multi_judge_results(n=20, oracle_scores=None, oracle_names=None, seed=42):
+    """Create SampleResults with multiple oracle evaluations."""
+    rng = np.random.default_rng(seed)
+    if oracle_names is None:
+        oracle_names = ["judge_a", "judge_b"]
+    if oracle_scores is None:
+        oracle_scores = {
+            name: [3.5 + rng.normal(0, 0.3) for _ in range(n)] for name in oracle_names
+        }
+
+    results = []
+    for i in range(n):
+        evaluations = {}
+        for name in oracle_names:
+            if i < len(oracle_scores[name]):
+                score = max(1.0, min(5.0, oracle_scores[name][i]))
+                evaluations[name] = EvaluationResult(score=score, explanation="ok")
+        results.append(
+            SampleResult(
+                sample_params={"param": i},
+                original_prompt="test prompt",
+                final_response="test response",
+                evaluations=evaluations,
+            )
+        )
+    return results
+
+
+@pytest.mark.slow
+class TestMultiJudgeQuality:
+    def test_returns_expected_keys_without_expected_score(self):
+        results = make_multi_judge_results(n=10)
+        analyzer = BayesianAnalyzer(
+            results,
+            analysis_config=BayesianAnalysisConfig(
+                mcmc_draws=100, mcmc_tune=100, mcmc_chains=1
+            ),
+        )
+        result = analyzer.estimate_multi_judge_quality(["judge_a", "judge_b"])
+
+        expected_keys = {
+            "true_quality_mean",
+            "true_quality_median",
+            "true_quality_std",
+            "hdi_lower",
+            "hdi_upper",
+            "hdi_prob",
+            "judges",
+            "bias_corrected_weighted_score",
+            "n_judges",
+            "n_total_evaluations",
+        }
+        assert set(result.keys()) == expected_keys
+        assert result["n_judges"] == 2
+        assert result["n_total_evaluations"] == 20
+        assert result["hdi_prob"] == 0.94
+
+        # Check per-judge keys
+        judge_keys = {
+            "bias_mean",
+            "bias_hdi",
+            "noise_mean",
+            "noise_hdi",
+            "n_evaluations",
+            "raw_score_mean",
+            "raw_score_std",
+            "consistency_weight",
+        }
+        for name in ["judge_a", "judge_b"]:
+            assert name in result["judges"]
+            assert set(result["judges"][name].keys()) == judge_keys
+
+    def test_returns_expected_keys_with_expected_score(self):
+        results = make_multi_judge_results(n=10)
+        analyzer = BayesianAnalyzer(
+            results,
+            analysis_config=BayesianAnalysisConfig(
+                mcmc_draws=100, mcmc_tune=100, mcmc_chains=1
+            ),
+        )
+        result = analyzer.estimate_multi_judge_quality(
+            ["judge_a", "judge_b"], expected_score=3.5
+        )
+
+        expected_keys = {
+            "expected_score",
+            "hdi_prob",
+            "judges",
+            "n_judges",
+            "n_total_evaluations",
+        }
+        assert set(result.keys()) == expected_keys
+        assert result["expected_score"] == 3.5
+        assert "true_quality_mean" not in result
+
+    def test_detects_bias(self):
+        """Judge with +1.0 offset should have positive bias."""
+        rng = np.random.default_rng(42)
+        n = 20
+        oracle_scores = {
+            "unbiased": [3.0 + rng.normal(0, 0.2) for _ in range(n)],
+            "biased": [4.0 + rng.normal(0, 0.2) for _ in range(n)],
+        }
+        results = make_multi_judge_results(
+            n=n,
+            oracle_scores=oracle_scores,
+            oracle_names=["unbiased", "biased"],
+        )
+        analyzer = BayesianAnalyzer(
+            results,
+            analysis_config=BayesianAnalysisConfig(
+                mcmc_draws=200, mcmc_tune=200, mcmc_chains=2
+            ),
+        )
+        result = analyzer.estimate_multi_judge_quality(["unbiased", "biased"])
+
+        # Biased judge should have higher bias than unbiased
+        assert (
+            result["judges"]["biased"]["bias_mean"]
+            > result["judges"]["unbiased"]["bias_mean"]
+        )
+
+    def test_noisy_judge_higher_noise(self):
+        """Noisy judge gets higher noise estimate."""
+        rng = np.random.default_rng(42)
+        n = 30
+        oracle_scores = {
+            "precise": [3.5 + rng.normal(0, 0.1) for _ in range(n)],
+            "noisy": [3.5 + rng.normal(0, 0.8) for _ in range(n)],
+        }
+        results = make_multi_judge_results(
+            n=n,
+            oracle_scores=oracle_scores,
+            oracle_names=["precise", "noisy"],
+        )
+        analyzer = BayesianAnalyzer(
+            results,
+            analysis_config=BayesianAnalysisConfig(
+                mcmc_draws=200, mcmc_tune=200, mcmc_chains=2
+            ),
+        )
+        result = analyzer.estimate_multi_judge_quality(["precise", "noisy"])
+
+        assert (
+            result["judges"]["noisy"]["noise_mean"]
+            > result["judges"]["precise"]["noise_mean"]
+        )
+
+    def test_consistency_weights_sum_to_one(self):
+        results = make_multi_judge_results(n=15)
+        analyzer = BayesianAnalyzer(
+            results,
+            analysis_config=BayesianAnalysisConfig(
+                mcmc_draws=100, mcmc_tune=100, mcmc_chains=1
+            ),
+        )
+        result = analyzer.estimate_multi_judge_quality(["judge_a", "judge_b"])
+
+        total = sum(info["consistency_weight"] for info in result["judges"].values())
+        assert abs(total - 1.0) < 1e-6
+
+    def test_handles_ragged_data(self):
+        """Different eval counts per judge."""
+        rng = np.random.default_rng(42)
+        # Judge A has 20 evals, Judge B has 15
+        oracle_scores = {
+            "judge_a": [3.5 + rng.normal(0, 0.3) for _ in range(20)],
+            "judge_b": [3.5 + rng.normal(0, 0.3) for _ in range(15)],
+        }
+        results = make_multi_judge_results(
+            n=20,
+            oracle_scores=oracle_scores,
+            oracle_names=["judge_a", "judge_b"],
+        )
+        analyzer = BayesianAnalyzer(
+            results,
+            analysis_config=BayesianAnalysisConfig(
+                mcmc_draws=100, mcmc_tune=100, mcmc_chains=1
+            ),
+        )
+        result = analyzer.estimate_multi_judge_quality(["judge_a", "judge_b"])
+
+        assert result["judges"]["judge_a"]["n_evaluations"] == 20
+        assert result["judges"]["judge_b"]["n_evaluations"] == 15
+        assert result["n_total_evaluations"] == 35

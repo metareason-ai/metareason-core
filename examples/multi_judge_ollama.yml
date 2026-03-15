@@ -1,0 +1,62 @@
+spec_id: multi_judge_ollama_test
+type: calibrate_multi
+prompt: "Explain the concept of quantum entanglement to a college student."
+response: |
+  Quantum entanglement is a phenomenon in quantum physics where two particles
+  become connected in such a way that measuring one instantly affects the other,
+  regardless of distance. Think of it like having two magic coins - when you
+  flip them, no matter how far apart they are, if one lands heads, the other
+  always lands tails. Einstein called this "spooky action at a distance"
+  because it seemed to violate the speed of light limit. But it's important
+  to note that you can't actually use entanglement to send information faster
+  than light. The correlation only becomes apparent when you compare the
+  measurements afterward.
+expected_score: 4
+repeats: 10
+oracles:
+  qwen3_judge:
+    type: llm_judge
+    model: qwen3:30b
+    adapter:
+      name: ollama
+    temperature: 0.7
+    rubric: |
+      Evaluate the response for coherence and clarity on a 1-5 scale:
+      1 = Completely incoherent or wrong
+      2 = Mostly unclear or contains significant errors
+      3 = Somewhat clear but has notable issues
+      4 = Clear and mostly accurate
+      5 = Exceptionally clear, accurate, and well-explained
+      Return JSON: {"score": X, "explanation": "..."}
+  gemma3_judge:
+    type: llm_judge
+    model: gemma3:27b
+    adapter:
+      name: ollama
+    temperature: 0.7
+    rubric: |
+      Evaluate the response for coherence and clarity on a 1-5 scale:
+      1 = Completely incoherent or wrong
+      2 = Mostly unclear or contains significant errors
+      3 = Somewhat clear but has notable issues
+      4 = Clear and mostly accurate
+      5 = Exceptionally clear, accurate, and well-explained
+      Return JSON: {"score": X, "explanation": "..."}
+  gptoss_judge:
+    type: llm_judge
+    model: gpt-oss:20b
+    adapter:
+      name: ollama
+    temperature: 0.7
+    rubric: |
+      Evaluate the response for coherence and clarity on a 1-5 scale:
+      1 = Completely incoherent or wrong
+      2 = Mostly unclear or contains significant errors
+      3 = Somewhat clear but has notable issues
+      4 = Clear and mostly accurate
+      5 = Exceptionally clear, accurate, and well-explained
+      Return JSON: {"score": X, "explanation": "..."}
+analysis:
+  hdi_probability: 0.94
+  mcmc_draws: 2000
+  mcmc_chains: 4

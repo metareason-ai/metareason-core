@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+
+    <script>{{ chartjs_source }}</script>
+    <script>{{ chartjs_annotation_source }}</script>
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; -webkit-font-smoothing: antialiased; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0; }
+        .container { max-width: 80rem; margin: 0 auto; padding: 1.5rem; }
+
+        .grid { display: grid; gap: 1.5rem; }
+        .grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .gap-3 { gap: 0.75rem; }
+        .gap-4 { gap: 1rem; }
+
+        .p-5 { padding: 1.25rem; }
+        .p-6 { padding: 1.5rem; }
+        .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mb-6 { margin-bottom: 1.5rem; }
+        .mb-8 { margin-bottom: 2rem; }
+        .mt-4 { margin-top: 1rem; }
+        .mt-12 { margin-top: 3rem; }
+        .pb-8 { padding-bottom: 2rem; }
+
+        .text-xs { font-size: 0.75rem; }
+        .text-sm { font-size: 0.875rem; }
+        .text-lg { font-size: 1.125rem; }
+        .text-xl { font-size: 1.25rem; }
+        .text-2xl { font-size: 1.5rem; }
+        .text-3xl { font-size: 1.875rem; }
+        .font-bold { font-weight: 700; }
+        .font-semibold { font-weight: 600; }
+        .font-medium { font-weight: 500; }
+        .font-mono { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; }
+        .uppercase { text-transform: uppercase; }
+        .tracking-wider { letter-spacing: 0.05em; }
+        .text-center { text-align: center; }
+        .text-left { text-align: left; }
+        .text-right { text-align: right; }
+        .whitespace-pre-wrap { white-space: pre-wrap; }
+
+        .text-white { color: #fff; }
+        .text-slate-400 { color: #94a3b8; }
+        .text-slate-500 { color: #64748b; }
+        .text-slate-600 { color: #475569; }
+        .text-slate-700 { color: #334155; }
+        .text-slate-800 { color: #1e293b; }
+        .text-slate-900 { color: #0f172a; }
+        .text-indigo-600 { color: #4f46e5; }
+        .text-indigo-700 { color: #4338ca; }
+        .text-green-600 { color: #16a34a; }
+        .text-amber-600 { color: #d97706; }
+        .text-red-600 { color: #dc2626; }
+        .text-blue-600 { color: #2563eb; }
+        .bg-slate-50 { background-color: #f8fafc; }
+        .bg-slate-100 { background-color: #f1f5f9; }
+        .bg-blue-50 { background-color: #eff6ff; }
+
+        .border { border: 1px solid #e2e8f0; }
+        .border-b { border-bottom: 1px solid #e2e8f0; }
+        .border-l-4 { border-left: 4px solid; }
+        .border-l-blue-500 { border-left-color: #3b82f6; }
+        .border-l-indigo-500 { border-left-color: #6366f1; }
+        .border-l-purple-500 { border-left-color: #a855f7; }
+        .border-l-slate-400 { border-left-color: #94a3b8; }
+        .border-l-green-500 { border-left-color: #22c55e; }
+        .border-l-amber-500 { border-left-color: #f59e0b; }
+        .border-l-red-500 { border-left-color: #ef4444; }
+        .rounded-lg { border-radius: 0.5rem; }
+        .rounded-xl { border-radius: 0.75rem; }
+        .overflow-hidden { overflow: hidden; }
+        .overflow-x-auto { overflow-x: auto; }
+
+        .w-full { width: 100%; }
+        .h-64 { height: 16rem; }
+        .relative { position: relative; }
+
+        .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1); }
+        .transition { transition: all 150ms ease; }
+        .hover-bg:hover { background-color: #f8fafc; }
+
+        .divide-y > * + * { border-top: 1px solid #f1f5f9; }
+
+        pre { font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace; }
+        .max-h-24 { max-height: 6rem; overflow-y: auto; }
+
+        /* Help button styles */
+        .help-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 20px; height: 20px; border-radius: 50%;
+            background: #e2e8f0; color: #64748b; border: none;
+            font-size: 12px; font-weight: 700; cursor: pointer;
+            margin-left: 6px; vertical-align: middle; line-height: 1;
+            transition: all 150ms ease; flex-shrink: 0;
+        }
+        .help-btn:hover { background: #4f46e5; color: white; }
+        .help-btn.active { background: #4f46e5; color: white; }
+        .help-text {
+            display: none; margin-top: 0.75rem; padding: 0.75rem 1rem;
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+            font-size: 0.8125rem; line-height: 1.6; color: #475569;
+            animation: helpFadeIn 150ms ease;
+        }
+        .help-text.open { display: block; }
+        .help-text strong { color: #1e293b; }
+        @keyframes helpFadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+        }
+
+        @media print {
+            body { background: white; }
+            .card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+            .no-print { display: none; }
+            .help-btn { display: none; }
+            .help-text { display: none !important; }
+        }
+    </style>
+</head>
+<body class="text-slate-800 container">
+
+    <!-- Header -->
+    <header class="flex justify-between items-center mb-8" style="flex-wrap:wrap;gap:1rem;">
+        <div>
+            <div class="text-xs font-bold tracking-wider text-indigo-600 uppercase mb-2">MetaReason Multi-Judge Report</div>
+            <h1 class="text-3xl font-bold text-slate-900">{{ spec_id }}</h1>
+            <p class="text-slate-500 text-sm mt-4">Generated: {{ timestamp }}</p>
+        </div>
+        <div class="flex gap-3">
+            <div class="flex" style="flex-direction:column;align-items:flex-end;" class="px-4 py-2 bg-white rounded-lg border">
+                <span class="text-xs text-slate-500 uppercase font-semibold">Judges</span>
+                <span class="font-bold text-lg">{{ n_judges }}</span>
+            </div>
+            <div class="flex" style="flex-direction:column;align-items:flex-end;" class="px-4 py-2 bg-white rounded-lg border">
+                <span class="text-xs text-slate-500 uppercase font-semibold">Repeats</span>
+                <span class="font-bold text-lg">{{ repeats }}</span>
+            </div>
+            <button onclick="window.print()" class="no-print px-4 py-2 rounded-lg font-medium text-sm text-white" style="background:#0f172a;">Print</button>
+        </div>
+    </header>
+
+    <!-- Per-Judge Assessment Cards -->
+    <section class="mb-8">
+        <div class="flex items-center mb-4">
+            <h2 class="font-bold text-slate-700 text-lg">Per-Judge Assessment</h2>
+            <button class="help-btn no-print" onclick="toggleHelp('help-cards')">?</button>
+        </div>
+        <div class="help-text" id="help-cards">
+            Each card summarizes one judge's calibration. The judge was asked to score the same fixed prompt+response {{ repeats }} times, so any variation in scores reflects the <strong>judge's behavior</strong>, not differences in content.
+            <br><br>
+            <strong>Accuracy (bias)</strong> &mdash; How far the judge's average score is from the known correct score{% if has_expected %} of {{ expected_score }}{% endif %}. A value of <strong>+0.5</strong> means the judge scores half a point too high on average. A value near <strong>0</strong> means the judge is well-calibrated. This is a <em>systematic</em> error &mdash; the judge consistently leans one direction.
+            <br><br>
+            <strong>Consistency (noise)</strong> &mdash; How much the judge's scores scatter across repeated evaluations of the same content. A value of <strong>&plusmn;0.3</strong> means scores typically wander &plusmn;0.3 points around the judge's average. Lower is better &mdash; a consistent judge gives similar scores each time.
+            <br><br>
+            <strong>{{ hdi_pct }}% CI</strong> &mdash; The credible interval from Bayesian analysis. "{{ hdi_pct }}% CI: [+0.2, +0.8]" means we are {{ hdi_pct }}% confident the true value lies in that range. Narrower intervals mean more certainty.
+            <br><br>
+            <strong>Border color</strong> &mdash; <span style="color:#22c55e;">Green</span> = well-calibrated. <span style="color:#d97706;">Amber</span> = usable with caveats. <span style="color:#ef4444;">Red</span> = problematic.
+        </div>
+        <div class="grid grid-{{ [n_judges, 3] | min }}">
+            {% for name, info in multi_judge.judges.items() %}
+            <div class="card p-6 border-l-4 {% if judge_verdicts[name].verdict_class == 'good' %}border-l-green-500{% elif judge_verdicts[name].verdict_class == 'warn' %}border-l-amber-500{% else %}border-l-red-500{% endif %}">
+                <h3 class="font-bold text-indigo-700 mb-4">{{ name }}</h3>
+                {% if has_expected %}
+                <div class="mb-2">
+                    <span class="text-xs text-slate-500 uppercase font-semibold">Accuracy (bias)</span>
+                    <div class="text-lg font-bold font-mono {% if info.bias_mean > 0.2 %}text-amber-600{% elif info.bias_mean < -0.2 %}text-blue-600{% else %}text-green-600{% endif %}">
+                        {{ "%+.2f"|format(info.bias_mean) }}
+                    </div>
+                    <div class="text-xs text-slate-400">{{ hdi_pct }}% CI: [{{ "%+.2f"|format(info.bias_hdi[0]) }}, {{ "%+.2f"|format(info.bias_hdi[1]) }}]</div>
+                </div>
+                {% endif %}
+                <div class="mb-2">
+                    <span class="text-xs text-slate-500 uppercase font-semibold">Consistency (noise)</span>
+                    <div class="text-lg font-bold font-mono">&plusmn;{{ "%.2f"|format(info.noise_mean) }}</div>
+                    <div class="text-xs text-slate-400">{{ hdi_pct }}% CI: [{{ "%.2f"|format(info.noise_hdi[0]) }}, {{ "%.2f"|format(info.noise_hdi[1]) }}]</div>
+                </div>
+                <div class="mt-4 text-sm font-semibold {% if judge_verdicts[name].verdict_class == 'good' %}text-green-600{% elif judge_verdicts[name].verdict_class == 'warn' %}text-amber-600{% else %}text-red-600{% endif %}">
+                    {{ judge_verdicts[name].verdict }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Judge Comparison Table -->
+    <section class="card overflow-hidden mb-8">
+        <div class="bg-slate-50 border-b px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center">
+                <h3 class="font-bold text-slate-700">Judge Comparison</h3>
+                <button class="help-btn no-print" onclick="toggleHelp('help-table')">?</button>
+            </div>
+            <span class="text-xs text-slate-500">{{ n_judges }} Judges &middot; {{ repeats }} repeats each</span>
+        </div>
+        <div class="help-text" id="help-table" style="margin:0;border-radius:0;border-left:0;border-right:0;border-top:0;">
+            <strong>Accuracy (bias)</strong> &mdash; Systematic scoring error vs the true score. Positive = scores too high (generous), negative = scores too low (harsh). Color-coded: <span style="color:#16a34a;">green</span> for low (&lt;0.3), <span style="color:#d97706;">amber</span> for high positive, <span style="color:#2563eb;">blue</span> for high negative.
+            <br><br>
+            <strong>Consistency (noise)</strong> &mdash; How much scores scatter across repeated evaluations of identical content. Lower = more predictable. A value of 0.5 on a 1&ndash;5 scale means scores wander by about half a point.
+            <br><br>
+            <strong>Consistency Weight</strong> &mdash; How much this judge's scores count toward the consensus. Computed as <code>1/noise&sup2;</code>, normalized so all weights sum to 100%. More consistent judges get more weight.
+            <br><br>
+            <strong>Raw Mean</strong> &mdash; The judge's simple average score before any corrections. Compare to the expected score{% if has_expected %} of {{ expected_score }}{% endif %} to see raw accuracy.
+            <br><br>
+            <strong>N</strong> &mdash; Number of successful evaluations (out of {{ repeats }} configured repeats).
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-white text-slate-500 border-b">
+                    <tr>
+                        <th class="px-4 py-3">Judge</th>
+                        <th class="px-4 py-3 text-right">Accuracy (bias)</th>
+                        <th class="px-4 py-3 text-right">Consistency (noise)</th>
+                        <th class="px-4 py-3 text-right">Consistency Weight</th>
+                        <th class="px-4 py-3 text-right">Raw Mean</th>
+                        <th class="px-4 py-3 text-right">N</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y">
+                    {% for name, info in multi_judge.judges.items() %}
+                    <tr class="hover-bg transition">
+                        <td class="px-4 py-3 font-medium text-indigo-700">{{ name }}</td>
+                        <td class="px-4 py-3 text-right font-mono {% if info.bias_mean > 0.2 %}text-amber-600{% elif info.bias_mean < -0.2 %}text-blue-600{% else %}text-green-600{% endif %}">{{ "%+.3f" | format(info.bias_mean) }}</td>
+                        <td class="px-4 py-3 text-right font-mono">{{ "%.3f" | format(info.noise_mean) }}</td>
+                        <td class="px-4 py-3 text-right font-mono font-semibold">{{ "%.1f%%" | format(info.consistency_weight * 100) }}</td>
+                        <td class="px-4 py-3 text-right font-mono">{{ "%.2f" | format(info.raw_score_mean) }}</td>
+                        <td class="px-4 py-3 text-right">{{ info.n_evaluations }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {% if recommendations %}
+    <!-- Recommendations -->
+    <section class="card p-6 mb-8 border-l-4 border-l-amber-500">
+        <div class="flex items-center mb-4">
+            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Recommendations</h3>
+            <button class="help-btn no-print" onclick="toggleHelp('help-recs')">?</button>
+        </div>
+        <div class="help-text" id="help-recs">
+            Automated suggestions based on noise thresholds. Judges with noise above <strong>1.0</strong> on a 1&ndash;5 scale are flagged as unreliable &mdash; their scores vary so widely that they add more uncertainty than information. Consider removing them and re-running, or investigating why (e.g., high temperature setting, ambiguous rubric).
+        </div>
+        <ul style="list-style:disc;padding-left:1.5rem;">
+            {% for rec in recommendations %}
+            <li class="text-sm text-slate-700 mb-2">{{ rec }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    <!-- Charts Grid -->
+    <section class="grid grid-2 mb-8">
+        <!-- Per-Judge Score Distributions -->
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center">
+                    <h3 class="font-bold text-slate-700">Score Distributions</h3>
+                    <button class="help-btn no-print" onclick="toggleHelp('help-hist')">?</button>
+                </div>
+                <span class="text-xs font-mono bg-slate-100 text-slate-600 px-3 py-2 rounded-lg">n={{ repeats }}</span>
+            </div>
+            <div class="help-text" id="help-hist">
+                Each color represents a different judge. The bars show how many times each judge gave a particular score (1 through 5) across all repeats.
+                <br><br>
+                <strong>What to look for:</strong><br>
+                &bull; <strong>Spread</strong> &mdash; A judge whose bars span multiple scores is inconsistent (high noise). One concentrated at a single score is consistent.<br>
+                &bull; <strong>Position</strong> &mdash; Judges whose bars cluster at higher scores have positive bias (generous), and vice versa.<br>
+                &bull; <strong>Overlap</strong> &mdash; When judges' distributions overlap, they broadly agree. When shifted apart, there's systematic bias between them.
+            </div>
+            <div class="relative h-64 w-full">
+                <canvas id="histogramChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Per-Judge Accuracy Posteriors (bias) -->
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center">
+                    <h3 class="font-bold text-slate-700">Accuracy Posteriors (bias)</h3>
+                    <button class="help-btn no-print" onclick="toggleHelp('help-bias')">?</button>
+                </div>
+                <span class="text-xs font-mono bg-blue-50 text-blue-600 px-3 py-2 rounded-lg">{{ hdi_pct }}% HDI</span>
+            </div>
+            <div class="help-text" id="help-bias">
+                Each curve shows the <strong>probability distribution of a judge's systematic error</strong> (bias), estimated by the Bayesian model. The dashed line at zero represents a perfectly accurate judge.
+                <br><br>
+                <strong>How to read it:</strong><br>
+                &bull; A curve <strong>centered on zero</strong> = the judge is accurate<br>
+                &bull; A curve <strong>shifted right</strong> = the judge scores too high (generous)<br>
+                &bull; A curve <strong>shifted left</strong> = the judge scores too low (harsh)<br>
+                &bull; A <strong>narrow, tall</strong> curve = we're confident about the bias estimate<br>
+                &bull; A <strong>wide, flat</strong> curve = more uncertainty (need more repeats)
+                <br><br>
+                The x-axis shows bias in score points. A bias of +0.5 means the judge averages half a point above the true score.
+            </div>
+            <div class="relative h-64 w-full">
+                <canvas id="biasPosteriorChart"></canvas>
+            </div>
+            <div class="mt-4 text-center text-xs text-slate-500">
+                Per-judge accuracy distributions. Dashed line at zero = perfectly accurate.
+            </div>
+        </div>
+
+        <!-- Per-Judge Consistency Posteriors (noise) -->
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center">
+                    <h3 class="font-bold text-slate-700">Consistency Posteriors (noise)</h3>
+                    <button class="help-btn no-print" onclick="toggleHelp('help-noise')">?</button>
+                </div>
+                <span class="text-xs font-mono bg-slate-100 text-slate-600 px-3 py-2 rounded-lg">{{ hdi_pct }}% HDI</span>
+            </div>
+            <div class="help-text" id="help-noise">
+                Each curve shows the <strong>probability distribution of a judge's inconsistency</strong> (noise), estimated by the Bayesian model.
+                <br><br>
+                <strong>How to read it:</strong><br>
+                &bull; A curve <strong>further left</strong> (lower values) = a more consistent judge<br>
+                &bull; A curve <strong>further right</strong> (higher values) = a noisier, less predictable judge<br>
+                &bull; A judge with noise of 0.3 gives scores that scatter &plusmn;0.3 around its average<br>
+                &bull; If two judges' curves overlap heavily, they have similar consistency
+                <br><br>
+                Noise cannot be zero (all measurement has some uncertainty), but lower is always better. Judges with noise above 1.0 on a 1&ndash;5 scale are generally unreliable.
+            </div>
+            <div class="relative h-64 w-full">
+                <canvas id="noisePosteriorChart"></canvas>
+            </div>
+            <div class="mt-4 text-center text-xs text-slate-500">
+                Per-judge consistency distributions. Further left = more consistent.
+            </div>
+        </div>
+    </section>
+
+    {% if not has_expected and multi_judge.true_quality_mean is defined %}
+    <!-- Estimated Quality (secondary, when no expected_score) -->
+    <section class="card p-6 mb-8">
+        <div class="flex items-center mb-4">
+            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Estimated Quality (secondary)</h3>
+            <button class="help-btn no-print" onclick="toggleHelp('help-quality')">?</button>
+        </div>
+        <div class="help-text" id="help-quality">
+            When no <strong>expected score</strong> is provided, the model estimates the true quality as a secondary output. This is less useful than the per-judge assessments above &mdash; it answers "what's the response quality?" rather than "which judge should I use?"
+            <br><br>
+            To get accuracy (bias) measurements, re-run calibration with <code>expected_score</code> set in your YAML spec.
+        </div>
+        <div class="grid grid-3">
+            <div>
+                <div class="text-xs text-slate-500 uppercase font-semibold mb-2">True Quality Mean</div>
+                <div class="text-2xl font-bold">{{ multi_judge.true_quality_mean | round(3) }}</div>
+            </div>
+            <div>
+                <div class="text-xs text-slate-500 uppercase font-semibold mb-2">{{ hdi_pct }}% HDI</div>
+                <div class="text-2xl font-bold">{{ multi_judge.hdi_lower | round(2) }} &ndash; {{ multi_judge.hdi_upper | round(2) }}</div>
+            </div>
+            <div>
+                <div class="text-xs text-slate-500 uppercase font-semibold mb-2">Bias-Corrected Score</div>
+                <div class="text-2xl font-bold">{{ multi_judge.bias_corrected_weighted_score | round(3) }}</div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Prompt/Response Context -->
+    <section class="card p-6 mb-8">
+        <div class="flex items-center mb-4">
+            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Fixed Prompt &amp; Response</h3>
+            <button class="help-btn no-print" onclick="toggleHelp('help-context')">?</button>
+        </div>
+        <div class="help-text" id="help-context">
+            This is the exact prompt and response that was evaluated. Every judge evaluates the <strong>same fixed content</strong> repeatedly, so that differences in scores reflect judge behavior (accuracy and consistency) rather than differences in what's being evaluated.
+        </div>
+        <div class="mb-4">
+            <div class="text-xs text-slate-500 uppercase font-semibold mb-2">Prompt</div>
+            <pre class="text-xs text-slate-600 bg-slate-50 rounded-lg p-5 whitespace-pre-wrap max-h-24">{{ prompt }}</pre>
+        </div>
+        <div>
+            <div class="text-xs text-slate-500 uppercase font-semibold mb-2">Response</div>
+            <pre class="text-xs text-slate-600 bg-slate-50 rounded-lg p-5 whitespace-pre-wrap max-h-24">{{ response }}</pre>
+        </div>
+    </section>
+
+    <footer class="mt-12 text-center text-xs text-slate-400 pb-8">
+        MetaReason Multi-Judge Report &middot; {{ timestamp[:4] }}
+    </footer>
+
+    <script>
+    // Help button toggle
+    function toggleHelp(id) {
+        var el = document.getElementById(id);
+        var wasOpen = el.classList.contains('open');
+        document.querySelectorAll('.help-text.open').forEach(function(h) { h.classList.remove('open'); });
+        document.querySelectorAll('.help-btn.active').forEach(function(b) { b.classList.remove('active'); });
+        if (!wasOpen) {
+            el.classList.add('open');
+            var btn = document.querySelector('[onclick="toggleHelp(\'' + id + '\')"]');
+            if (btn) btn.classList.add('active');
+        }
+    }
+
+    (function() {
+        const d = {{ chart_data | tojson }};
+        const COLORS = ['#4f46e5', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
+
+        // --- Per-Judge Histograms ---
+        const histDatasets = d.judge_names.map((name, i) => ({
+            label: name,
+            data: d.judge_histograms[name],
+            backgroundColor: COLORS[i % COLORS.length] + '80',
+            borderColor: COLORS[i % COLORS.length],
+            borderWidth: 1,
+            borderRadius: 2
+        }));
+        new Chart(document.getElementById('histogramChart'), {
+            type: 'bar',
+            data: { labels: d.histogram_labels, datasets: histDatasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } } },
+                scales: {
+                    x: { grid: { display: false }, title: { display: true, text: 'Score' } },
+                    y: { grid: { color: '#f1f5f9' }, beginAtZero: true, title: { display: true, text: 'Count' }, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+
+        // --- Accuracy Posterior KDEs (bias) ---
+        const biasDatasets = d.judge_names.map((name, i) => {
+            const bp = d.bias_posteriors[name];
+            return {
+                label: name,
+                data: bp.x.map((x, j) => ({x: x, y: bp.y[j]})),
+                showLine: true,
+                borderColor: COLORS[i % COLORS.length],
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 0,
+                tension: 0.3
+            };
+        });
+        new Chart(document.getElementById('biasPosteriorChart'), {
+            type: 'scatter',
+            data: { datasets: biasDatasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } },
+                    annotation: {
+                        annotations: {
+                            zeroLine: { type: 'line', xMin: 0, xMax: 0, borderColor: '#94a3b8', borderWidth: 1, borderDash: [4, 4] }
+                        }
+                    }
+                },
+                scales: {
+                    x: { type: 'linear', grid: { display: false }, title: { display: true, text: 'Error (bias)' }, ticks: { callback: v => (v >= 0 ? '+' : '') + v.toFixed(1) } },
+                    y: { grid: { color: '#f1f5f9' }, beginAtZero: true, title: { display: true, text: 'Density' }, ticks: { display: false } }
+                }
+            }
+        });
+
+        // --- Consistency Posterior KDEs (noise) ---
+        const noiseDatasets = d.judge_names.map((name, i) => {
+            const np_data = d.noise_posteriors[name];
+            return {
+                label: name,
+                data: np_data.x.map((x, j) => ({x: x, y: np_data.y[j]})),
+                showLine: true,
+                borderColor: COLORS[i % COLORS.length],
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 0,
+                tension: 0.3
+            };
+        });
+        new Chart(document.getElementById('noisePosteriorChart'), {
+            type: 'scatter',
+            data: { datasets: noiseDatasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } }
+                },
+                scales: {
+                    x: { type: 'linear', grid: { display: false }, title: { display: true, text: 'Inconsistency (noise)' }, ticks: { callback: v => v.toFixed(2) } },
+                    y: { grid: { color: '#f1f5f9' }, beginAtZero: true, title: { display: true, text: 'Density' }, ticks: { display: false } }
+                }
+            }
+        });
+    })();
+    </script>
+</body>
+</html>

@@ -6,6 +6,7 @@ from metareason.config.models import (
     AxisConfig,
     BayesianAnalysisConfig,
     CalibrateConfig,
+    CalibrateMultiConfig,
     OracleConfig,
     PipelineConfig,
     SamplingConfig,
@@ -242,6 +243,20 @@ class TestBayesianAnalysisConfig:
         with pytest.raises(ValidationError):
             BayesianAnalysisConfig(hdi_probability=0.0)
 
+    def test_prior_bias_sigma_default(self):
+        cfg = BayesianAnalysisConfig()
+        assert cfg.prior_bias_sigma == 1.0
+
+    def test_prior_bias_sigma_custom(self):
+        cfg = BayesianAnalysisConfig(prior_bias_sigma=2.0)
+        assert cfg.prior_bias_sigma == 2.0
+
+    def test_prior_bias_sigma_rejects_non_positive(self):
+        with pytest.raises(ValidationError):
+            BayesianAnalysisConfig(prior_bias_sigma=0.0)
+        with pytest.raises(ValidationError):
+            BayesianAnalysisConfig(prior_bias_sigma=-1.0)
+
 
 # --- SpecConfig ---
 
@@ -379,3 +394,96 @@ class TestCalibrateConfig:
         assert cfg.expected_score == 3.5
         assert cfg.repeats == 50
         assert cfg.analysis.mcmc_draws == 500
+
+
+# --- CalibrateMultiConfig ---
+
+
+class TestCalibrateMultiConfig:
+    def _make_two_oracles(self):
+        return {
+            "judge_a": make_oracle(),
+            "judge_b": make_oracle(model="gpt-4o"),
+        }
+
+    def test_valid_multi_config(self):
+        cfg = CalibrateMultiConfig(
+            spec_id="multi-1",
+            prompt="Test prompt",
+            response="Test response",
+            oracles=self._make_two_oracles(),
+        )
+        assert cfg.spec_id == "multi-1"
+        assert cfg.type == "calibrate_multi"
+        assert len(cfg.oracles) == 2
+
+    def test_multi_config_defaults(self):
+        cfg = CalibrateMultiConfig(
+            spec_id="multi",
+            prompt="p",
+            response="r",
+            oracles=self._make_two_oracles(),
+        )
+        assert cfg.repeats == 30
+        assert cfg.expected_score is None
+        assert cfg.analysis is None
+
+    def test_multi_config_rejects_single_oracle(self):
+        with pytest.raises(ValidationError):
+            CalibrateMultiConfig(
+                spec_id="multi",
+                prompt="p",
+                response="r",
+                oracles={"only_one": make_oracle()},
+            )
+
+    def test_multi_config_rejects_empty_oracles(self):
+        with pytest.raises(ValidationError):
+            CalibrateMultiConfig(
+                spec_id="multi",
+                prompt="p",
+                response="r",
+                oracles={},
+            )
+
+    def test_multi_config_three_oracles(self):
+        oracles = self._make_two_oracles()
+        oracles["judge_c"] = make_oracle(model="gemma3:27b")
+        cfg = CalibrateMultiConfig(
+            spec_id="multi-3",
+            prompt="p",
+            response="r",
+            oracles=oracles,
+        )
+        assert len(cfg.oracles) == 3
+
+    def test_multi_config_with_expected_score(self):
+        cfg = CalibrateMultiConfig(
+            spec_id="multi",
+            prompt="p",
+            response="r",
+            expected_score=4.0,
+            oracles=self._make_two_oracles(),
+        )
+        assert cfg.expected_score == 4.0
+
+    def test_multi_config_expected_score_bounds(self):
+        with pytest.raises(ValidationError):
+            CalibrateMultiConfig(
+                spec_id="multi",
+                prompt="p",
+                response="r",
+                expected_score=0.5,
+                oracles=self._make_two_oracles(),
+            )
+
+    def test_multi_config_with_analysis(self):
+        cfg = CalibrateMultiConfig(
+            spec_id="multi",
+            prompt="p",
+            response="r",
+            oracles=self._make_two_oracles(),
+            analysis=BayesianAnalysisConfig(mcmc_draws=500, prior_bias_sigma=2.0),
+        )
+        assert cfg.analysis.mcmc_draws == 500
+        assert cfg.analysis.prior_bias_sigma == 2.0

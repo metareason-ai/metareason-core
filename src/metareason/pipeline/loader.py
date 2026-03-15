@@ -3,7 +3,7 @@ from typing import Union
 
 import yaml
 
-from ..config import CalibrateConfig, SpecConfig
+from ..config import CalibrateConfig, CalibrateMultiConfig, SpecConfig
 
 
 def load_spec(file_path: Union[str, Path]) -> SpecConfig:
@@ -55,3 +55,25 @@ def load_calibrate_spec(file_path: Union[str, Path]) -> CalibrateConfig:
         data["response"] = _resolve_file_reference(data["response"], base_dir)
 
     return CalibrateConfig(**data)
+
+
+def load_calibrate_multi_spec(
+    file_path: Union[str, Path],
+) -> CalibrateMultiConfig:
+    """Load and validate a multi-judge calibration YAML specification file.
+
+    Resolves 'file:' prefixes in prompt and response fields to load
+    content from external files (paths relative to the spec file).
+    """
+    path = Path(file_path)
+    base_dir = path.parent
+
+    with open(path, "r") as f:
+        data = yaml.safe_load(f)
+
+    if "prompt" in data:
+        data["prompt"] = _resolve_file_reference(data["prompt"], base_dir)
+    if "response" in data:
+        data["response"] = _resolve_file_reference(data["response"], base_dir)
+
+    return CalibrateMultiConfig(**data)

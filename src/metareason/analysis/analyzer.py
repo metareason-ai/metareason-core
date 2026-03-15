@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import arviz as az
 import numpy as np
@@ -185,6 +185,103 @@ class BayesianAnalyzer:
             "n_samples": len(scores),
         }
 
+    def estimate_judge_calibration(
+        self,
+        oracle_name: str,
+        expected_score: Optional[float] = None,
+        hdi_prob: float = 0.94,
+    ) -> dict:
+        """Estimate judge bias and noise for calibration.
+
+        With expected_score: estimates judge_bias and judge_noise, anchored to
+        the known score. Without: estimates true_quality (as nuisance) and
+        judge_noise; bias is not identifiable without a reference point.
+
+        Args:
+            oracle_name: Name of the oracle to analyze.
+            expected_score: Known ground-truth score, if available.
+            hdi_prob: Probability mass for credible intervals.
+
+        Returns:
+            Dict with judge-focused calibration results.
+        """
+        scores = np.array([r.evaluations[oracle_name].score for r in self.results])
+
+        with pm.Model():
+            if expected_score is not None:
+                judge_bias = pm.Normal(
+                    "judge_bias",
+                    mu=0,
+                    sigma=self.analysis_config.prior_bias_sigma,
+                )
+                judge_noise = pm.HalfNormal(
+                    "judge_noise", sigma=self.analysis_config.prior_noise_sigma
+                )
+                pm.Normal(
+                    "observed",
+                    mu=expected_score + judge_bias,
+                    sigma=judge_noise,
+                    observed=scores,
+                )
+            else:
+                true_quality = pm.Normal(
+                    "true_quality",
+                    mu=self.analysis_config.prior_quality_mu,
+                    sigma=self.analysis_config.prior_quality_sigma,
+                )
+                judge_noise = pm.HalfNormal(
+                    "judge_noise", sigma=self.analysis_config.prior_noise_sigma
+                )
+                pm.Normal(
+                    "observed",
+                    mu=true_quality,
+                    sigma=judge_noise,
+                    observed=scores,
+                )
+
+            trace = pm.sample(
+                draws=self.analysis_config.mcmc_draws,
+                tune=self.analysis_config.mcmc_tune,
+                chains=self.analysis_config.mcmc_chains,
+            )
+
+        posterior = trace.posterior
+        noise_samples = posterior["judge_noise"].values.flatten()
+        noise_hdi = az.hdi(trace, var_names=["judge_noise"], hdi_prob=hdi_prob)
+
+        result = {
+            "noise_mean": float(noise_samples.mean()),
+            "noise_hdi": (
+                float(noise_hdi["judge_noise"].values[0]),
+                float(noise_hdi["judge_noise"].values[1]),
+            ),
+            "n_samples": len(scores),
+            "hdi_prob": hdi_prob,
+            "raw_score_mean": float(scores.mean()),
+            "raw_score_std": float(scores.std()),
+        }
+
+        if expected_score is not None:
+            bias_samples = posterior["judge_bias"].values.flatten()
+            bias_hdi = az.hdi(trace, var_names=["judge_bias"], hdi_prob=hdi_prob)
+            result["expected_score"] = expected_score
+            result["bias_mean"] = float(bias_samples.mean())
+            result["bias_median"] = float(np.median(bias_samples))
+            result["bias_hdi"] = (
+                float(bias_hdi["judge_bias"].values[0]),
+                float(bias_hdi["judge_bias"].values[1]),
+            )
+        else:
+            quality_samples = posterior["true_quality"].values.flatten()
+            quality_hdi = az.hdi(trace, var_names=["true_quality"], hdi_prob=hdi_prob)
+            result["estimated_quality_mean"] = float(quality_samples.mean())
+            result["estimated_quality_hdi"] = (
+                float(quality_hdi["true_quality"].values[0]),
+                float(quality_hdi["true_quality"].values[1]),
+            )
+
+        return result
+
     def _build_design_matrix(self, oracle_name: str, axes: List[AxisConfig]) -> tuple:
         """Build design matrix from sample params and axis configs.
 
@@ -355,3 +452,155 @@ class BayesianAnalyzer:
             "n_predictors": X.shape[1],
             "hdi_prob": hdi_prob,
         }
+
+    def estimate_multi_judge_quality(
+        self,
+        oracle_names: List[str],
+        hdi_prob: float = 0.94,
+        expected_score: Optional[float] = None,
+    ) -> dict:
+        """Estimate judge calibration from multiple judges using a hierarchical model.
+
+        With expected_score: anchors to the known score and drops true_quality.
+        Without: keeps true_quality as a nuisance parameter.
+
+        In both cases, per-judge bias and noise are the primary outputs.
+
+        Args:
+            oracle_names: List of oracle names to include in the model.
+            hdi_prob: Probability mass for credible intervals.
+            expected_score: Known ground-truth score, if available.
+
+        Returns:
+            Dict with per-judge bias/noise/consistency_weight, and optionally
+            true quality estimates (when expected_score is not provided).
+        """
+        # Build flat arrays with judge index mapping
+        scores_flat = []
+        judge_idx = []
+        per_judge_scores = {}
+
+        for j, name in enumerate(oracle_names):
+            oracle_scores = [
+                r.evaluations[name].score for r in self.results if name in r.evaluations
+            ]
+            per_judge_scores[name] = oracle_scores
+            scores_flat.extend(oracle_scores)
+            judge_idx.extend([j] * len(oracle_scores))
+
+        scores_array = np.array(scores_flat)
+        judge_idx_array = np.array(judge_idx, dtype=int)
+        n_judges = len(oracle_names)
+
+        with pm.Model():
+            if expected_score is not None:
+                anchor = expected_score
+            else:
+                true_quality = pm.Normal(
+                    "true_quality",
+                    mu=self.analysis_config.prior_quality_mu,
+                    sigma=self.analysis_config.prior_quality_sigma,
+                )
+                anchor = true_quality
+
+            bias = pm.Normal(
+                "bias",
+                mu=0,
+                sigma=self.analysis_config.prior_bias_sigma,
+                shape=n_judges,
+            )
+
+            noise = pm.HalfNormal(
+                "noise",
+                sigma=self.analysis_config.prior_noise_sigma,
+                shape=n_judges,
+            )
+
+            mu = anchor + bias[judge_idx_array]
+            sigma = noise[judge_idx_array]
+
+            pm.Normal("observed", mu=mu, sigma=sigma, observed=scores_array)
+
+            trace = pm.sample(
+                draws=self.analysis_config.mcmc_draws,
+                tune=self.analysis_config.mcmc_tune,
+                chains=self.analysis_config.mcmc_chains,
+            )
+
+        posterior = trace.posterior
+
+        # Per-judge stats
+        bias_samples = posterior["bias"].values  # (chains, draws, n_judges)
+        noise_samples = posterior["noise"].values
+
+        n_chains, n_draws = bias_samples.shape[0], bias_samples.shape[1]
+        flat_bias = bias_samples.reshape(n_chains * n_draws, n_judges)
+        flat_noise = noise_samples.reshape(n_chains * n_draws, n_judges)
+
+        bias_hdi = az.hdi(trace, var_names=["bias"], hdi_prob=hdi_prob)
+        noise_hdi = az.hdi(trace, var_names=["noise"], hdi_prob=hdi_prob)
+
+        judges = {}
+        for j, name in enumerate(oracle_names):
+            judge_bias = flat_bias[:, j]
+            judge_noise = flat_noise[:, j]
+            raw_scores = per_judge_scores[name]
+
+            judges[name] = {
+                "bias_mean": float(judge_bias.mean()),
+                "bias_hdi": (
+                    float(bias_hdi["bias"].values[j, 0]),
+                    float(bias_hdi["bias"].values[j, 1]),
+                ),
+                "noise_mean": float(judge_noise.mean()),
+                "noise_hdi": (
+                    float(noise_hdi["noise"].values[j, 0]),
+                    float(noise_hdi["noise"].values[j, 1]),
+                ),
+                "n_evaluations": len(raw_scores),
+                "raw_score_mean": float(np.mean(raw_scores)),
+                "raw_score_std": float(np.std(raw_scores)),
+            }
+
+        # Consistency weights: 1/noise^2, normalized
+        # Use a floor to prevent near-zero noise from dominating
+        noise_values = [info["noise_mean"] for info in judges.values()]
+        non_tiny = [v for v in noise_values if v > 0.01]
+        noise_floor = max(min(non_tiny) if non_tiny else 0.05, 0.01)
+        weights = {}
+        for name, info in judges.items():
+            noise_val = max(info["noise_mean"], noise_floor)
+            weights[name] = 1.0 / (noise_val**2)
+        total_weight = sum(weights.values())
+        for name in judges:
+            judges[name]["consistency_weight"] = weights[name] / total_weight
+
+        result = {
+            "hdi_prob": hdi_prob,
+            "judges": judges,
+            "n_judges": n_judges,
+            "n_total_evaluations": len(scores_flat),
+        }
+
+        if expected_score is not None:
+            result["expected_score"] = expected_score
+        else:
+            # True quality stats (nuisance parameter, secondary output)
+            quality_samples = posterior["true_quality"].values.flatten()
+            quality_hdi = az.hdi(trace, var_names=["true_quality"], hdi_prob=hdi_prob)
+
+            result["true_quality_mean"] = float(quality_samples.mean())
+            result["true_quality_median"] = float(np.median(quality_samples))
+            result["true_quality_std"] = float(quality_samples.std())
+            result["hdi_lower"] = float(quality_hdi["true_quality"].values[0])
+            result["hdi_upper"] = float(quality_hdi["true_quality"].values[1])
+
+            # Bias-corrected weighted score
+            bc_num = sum(
+                judges[name]["consistency_weight"]
+                * (judges[name]["raw_score_mean"] - judges[name]["bias_mean"])
+                for name in oracle_names
+            )
+            result["bias_corrected_weighted_score"] = float(bc_num)
+
+        return result
