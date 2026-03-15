@@ -183,6 +183,8 @@ class BayesianAnalyzer:
                 float(noise_hdi["oracle_noise"].values[1]),
             ),
             "n_samples": len(scores),
+            "posterior_samples": quality_samples.tolist(),
+            "noise_posterior_samples": noise_samples.tolist(),
         }
 
     def estimate_judge_calibration(
@@ -259,6 +261,7 @@ class BayesianAnalyzer:
             "hdi_prob": hdi_prob,
             "raw_score_mean": float(scores.mean()),
             "raw_score_std": float(scores.std()),
+            "noise_posterior_samples": noise_samples.tolist(),
         }
 
         if expected_score is not None:
@@ -271,6 +274,7 @@ class BayesianAnalyzer:
                 float(bias_hdi["judge_bias"].values[0]),
                 float(bias_hdi["judge_bias"].values[1]),
             )
+            result["bias_posterior_samples"] = bias_samples.tolist()
         else:
             quality_samples = posterior["true_quality"].values.flatten()
             quality_hdi = az.hdi(trace, var_names=["true_quality"], hdi_prob=hdi_prob)
@@ -560,6 +564,8 @@ class BayesianAnalyzer:
                 "n_evaluations": len(raw_scores),
                 "raw_score_mean": float(np.mean(raw_scores)),
                 "raw_score_std": float(np.std(raw_scores)),
+                "bias_posterior_samples": judge_bias.tolist(),
+                "noise_posterior_samples": judge_noise.tolist(),
             }
 
         # Consistency weights: 1/noise^2, normalized

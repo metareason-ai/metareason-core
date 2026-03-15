@@ -111,21 +111,30 @@ class CalibrationReportGenerator:
         has_expected = "expected_score" in self.analysis
 
         if has_expected:
-            # Bias posterior KDE
-            bias_mean = self.analysis["bias_mean"]
-            bias_lo, bias_hi = self.analysis["bias_hdi"]
-            bias_width = bias_hi - bias_lo
-            bias_std = max(bias_width / 3.3, 0.01)
-            bias_samples = np.random.normal(bias_mean, bias_std, 4000)
+            # Bias posterior KDE — use real MCMC samples when available
+            if "bias_posterior_samples" in self.analysis:
+                bias_samples = np.array(self.analysis["bias_posterior_samples"])
+            else:
+                # Fallback for legacy JSON files without trace data
+                bias_mean = self.analysis["bias_mean"]
+                bias_lo, bias_hi = self.analysis["bias_hdi"]
+                bias_width = bias_hi - bias_lo
+                bias_std = max(bias_width / 3.3, 0.01)
+                rng = np.random.default_rng(42)
+                bias_samples = rng.normal(bias_mean, bias_std, 4000)
 
             kde = gaussian_kde(bias_samples)
             x = np.linspace(bias_samples.min() - 0.5, bias_samples.max() + 0.5, 80)
             y = kde(x)
             chart_data["bias_x"] = [round(float(v), 4) for v in x]
             chart_data["bias_y"] = [round(float(v), 4) for v in y]
-            chart_data["bias_mean"] = round(float(bias_mean), 4)
-            chart_data["bias_hdi_lower"] = round(float(bias_lo), 4)
-            chart_data["bias_hdi_upper"] = round(float(bias_hi), 4)
+            chart_data["bias_mean"] = round(float(self.analysis["bias_mean"]), 4)
+            chart_data["bias_hdi_lower"] = round(
+                float(self.analysis["bias_hdi"][0]), 4
+            )
+            chart_data["bias_hdi_upper"] = round(
+                float(self.analysis["bias_hdi"][1]), 4
+            )
 
         # Score histogram
         bins = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]
@@ -134,12 +143,17 @@ class CalibrationReportGenerator:
         chart_data["histogram_counts"] = [int(c) for c in counts]
         chart_data["score_mean"] = round(float(np.mean(scores)), 3)
 
-        # Noise KDE
-        noise_mean = self.analysis["noise_mean"]
-        noise_lo, noise_hi = self.analysis["noise_hdi"]
-        noise_width = noise_hi - noise_lo
-        noise_std = max(noise_width / 3.3, 0.01)
-        noise_samples = np.abs(np.random.normal(noise_mean, noise_std, 4000))
+        # Noise KDE — use real MCMC samples when available
+        if "noise_posterior_samples" in self.analysis:
+            noise_samples = np.array(self.analysis["noise_posterior_samples"])
+        else:
+            # Fallback for legacy JSON files without trace data
+            noise_mean = self.analysis["noise_mean"]
+            noise_lo, noise_hi = self.analysis["noise_hdi"]
+            noise_width = noise_hi - noise_lo
+            noise_std = max(noise_width / 3.3, 0.01)
+            rng = np.random.default_rng(43)
+            noise_samples = np.abs(rng.normal(noise_mean, noise_std, 4000))
 
         noise_kde = gaussian_kde(noise_samples)
         nx = np.linspace(
@@ -150,9 +164,13 @@ class CalibrationReportGenerator:
         ny = noise_kde(nx)
         chart_data["noise_x"] = [round(float(v), 4) for v in nx]
         chart_data["noise_y"] = [round(float(v), 4) for v in ny]
-        chart_data["noise_mean"] = round(float(noise_mean), 4)
-        chart_data["noise_hdi_lower"] = round(float(noise_lo), 4)
-        chart_data["noise_hdi_upper"] = round(float(noise_hi), 4)
+        chart_data["noise_mean"] = round(float(self.analysis["noise_mean"]), 4)
+        chart_data["noise_hdi_lower"] = round(
+            float(self.analysis["noise_hdi"][0]), 4
+        )
+        chart_data["noise_hdi_upper"] = round(
+            float(self.analysis["noise_hdi"][1]), 4
+        )
 
         chart_data["has_expected"] = has_expected
 
