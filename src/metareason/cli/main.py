@@ -316,47 +316,10 @@ def run(spec, output, analyze, report, db):
 
         # Initialize DB storage if requested
         store = None
-        run_id = None
         if db:
             from ..storage import RunStore
 
             store = RunStore(db)
-            run_id = store.start_run(
-                spec_id=spec_config.spec_id,
-                n_variants=len(responses),
-                n_oracles=len(spec_config.oracles),
-            )
-            # Save pipeline stage configs
-            stages = [
-                {
-                    "model": stage.model,
-                    "adapter": stage.adapter.name,
-                    "temperature": stage.temperature,
-                    "top_p": stage.top_p,
-                    "max_tokens": stage.max_tokens,
-                }
-                for stage in spec_config.pipeline
-            ]
-            store.save_pipeline_stages(run_id, stages)
-
-            # Save every sample + evaluations
-            for i, response in enumerate(responses):
-                evals = {
-                    name: {
-                        "score": ev.score,
-                        "explanation": ev.explanation,
-                    }
-                    for name, ev in response.evaluations.items()
-                }
-                store.save_sample(
-                    run_id=run_id,
-                    sample_index=i,
-                    sample_params=response.sample_params,
-                    original_prompt=response.original_prompt,
-                    final_response=response.final_response,
-                    evaluations=evals,
-                )
-            console.print(f"[green]✓ Saved {len(responses)} samples to {db}[/green]")
 
         # Display results
         for i, response in enumerate(responses, 1):
@@ -460,24 +423,41 @@ def run(spec, output, analyze, report, db):
             generator.generate_html(report_path)
             console.print(f"[green]✓ HTML report saved to {report_path}[/green]")
 
-        # Save analysis to DB and finalize run
-        if store and run_id is not None:
-            if analyze and "analysis_results" in locals() and analysis_results:
-                for oracle_name, pop_result in analysis_results.items():
-                    store.save_analysis(run_id, oracle_name, pop_result)
-                console.print(
-                    f"[green]✓ Analysis results saved to {db}[/green]"
-                )
-            store.finish_run(run_id)
+        # Save to DB if requested
+        if store:
+            pipeline_stages = [
+                {
+                    "model": stage.model,
+                    "adapter": stage.adapter.name,
+                    "temperature": stage.temperature,
+                    "top_p": stage.top_p,
+                    "max_tokens": stage.max_tokens,
+                }
+                for stage in spec_config.pipeline
+            ]
+            db_analysis = (
+                analysis_results
+                if analyze and "analysis_results" in locals()
+                else None
+            )
+            store.save_run_results(
+                spec_id=spec_config.spec_id,
+                results=responses,
+                pipeline_stages=pipeline_stages,
+                spec_yaml=spec_path.read_text(),
+                analysis_results=db_analysis,
+            )
+            console.print(
+                f"[green]✓ Run data saved to {db}[/green]"
+            )
             store.close()
 
     except Exception as e:
-        # Mark run as failed if DB is active
-        if "store" in locals() and store and "run_id" in locals() and run_id:
-            store.finish_run(run_id, status="failed")
-            store.close()
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise
+    finally:
+        if store:
+            store.close()
 
 
 @metareason.command()
@@ -1214,7 +1194,9 @@ def db(ctx, db_path):
     from ..storage import RunStore
 
     ctx.ensure_object(dict)
-    ctx.obj["store"] = RunStore(db_path)
+    store = RunStore(db_path)
+    ctx.obj["store"] = store
+    ctx.call_on_close(store.close)
 
 
 @db.command(name="runs")
@@ -1252,7 +1234,6 @@ def db_runs(ctx, limit):
         )
 
     console.print(table)
-    store.close()
 
 
 @db.command(name="scores")
@@ -1280,7 +1261,6 @@ def db_scores(ctx, run_id, oracle):
         )
 
     console.print(table)
-    store.close()
 
 
 @db.command(name="export")
@@ -1290,12 +1270,19 @@ def db_scores(ctx, run_id, oracle):
 )
 @click.option("--oracle", "-o", default=None, help="Filter by oracle name")
 @click.option("--output", "-f", default=None, help="Output JSONL file path")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["raw", "openai", "messages"]),
+    default="raw",
+    help="Export format (raw, openai chat, or messages)",
+)
 @click.pass_context
-def db_export(ctx, run_id, min_score, oracle, output):
+def db_export(ctx, run_id, min_score, oracle, output, fmt):
     """Export high-quality prompt/response pairs for fine-tuning."""
     store = ctx.obj["store"]
     pairs = store.export_for_finetuning(
-        run_id=run_id, min_score=min_score, oracle_name=oracle
+        run_id=run_id, min_score=min_score, oracle_name=oracle, format=fmt
     )
 
     if not pairs:
@@ -1305,8 +1292,6 @@ def db_export(ctx, run_id, min_score, oracle, output):
     console.print(f"[green]Found {len(pairs)} pairs with score >= {min_score}[/green]")
 
     if output:
-        from pathlib import Path
-
         output_path = Path(output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w") as f:
@@ -1315,12 +1300,16 @@ def db_export(ctx, run_id, min_score, oracle, output):
         console.print(f"[green]✓ Exported to {output_path}[/green]")
     else:
         for pair in pairs:
-            console.print(
-                f"[cyan]Score {pair['score']:.1f}[/cyan] ({pair['oracle_name']}): "
-                f"{pair['prompt'][:80]}..."
-            )
-
-    store.close()
+            if fmt == "openai":
+                prompt = pair["messages"][0]["content"][:80]
+                console.print(f"  {prompt}...")
+            else:
+                scores = pair.get("scores", {})
+                best = max(scores.values()) if scores else 0
+                console.print(
+                    f"[cyan]Score {best:.1f}[/cyan]: "
+                    f"{pair['prompt'][:80]}..."
+                )
 
 
 if __name__ == "__main__":

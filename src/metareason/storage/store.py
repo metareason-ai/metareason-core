@@ -1,22 +1,20 @@
 """SQLite-based storage for evaluation run data.
 
 Stores prompts, responses, evaluation scores, and analysis results
-for future fine-tuning and dashboard use.
+for fine-tuning export and dashboard display.
 """
 
 import json
 import sqlite3
-from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
 
 
 _SCHEMA_VERSION = 1
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
-    version INTEGER NOT NULL
+    version INTEGER NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS runs (
@@ -86,10 +84,13 @@ class RunStore:
     def __init__(self, db_path: str | Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
+        self._closed = False
         self._ensure_schema()
 
     def _get_conn(self) -> sqlite3.Connection:
+        if self._closed:
+            raise RuntimeError("RunStore has been closed")
         if self._conn is None:
             self._conn = sqlite3.connect(str(self.db_path))
             self._conn.execute("PRAGMA journal_mode=WAL")
@@ -97,7 +98,7 @@ class RunStore:
             self._conn.row_factory = sqlite3.Row
         return self._conn
 
-    def _ensure_schema(self):
+    def _ensure_schema(self) -> None:
         conn = self._get_conn()
         conn.executescript(_SCHEMA_SQL)
 
@@ -107,12 +108,18 @@ class RunStore:
             conn.execute(
                 "INSERT INTO schema_version (version) VALUES (?)", (_SCHEMA_VERSION,)
             )
+        elif row[0] != _SCHEMA_VERSION:
+            raise RuntimeError(
+                f"Database schema version {row[0]} does not match "
+                f"expected version {_SCHEMA_VERSION}. Migration required."
+            )
         conn.commit()
 
-    def close(self):
+    def close(self) -> None:
         if self._conn is not None:
             self._conn.close()
             self._conn = None
+        self._closed = True
 
     def __enter__(self):
         return self
@@ -120,15 +127,107 @@ class RunStore:
     def __exit__(self, *exc):
         self.close()
 
-    # ── Write operations ──────────────────────────────────────────────
+    # ── High-level API ──────────────────────────────────────────────
+
+    def save_run_results(
+        self,
+        spec_id: str,
+        results: list,
+        pipeline_stages: list[dict],
+        spec_yaml: str | None = None,
+        analysis_results: dict | None = None,
+    ) -> int:
+        """Save a complete run from domain objects in a single transaction.
+
+        This is the preferred entry point for persisting pipeline results.
+        Accepts SampleResult objects (or any object with sample_params,
+        original_prompt, final_response, and evaluations attributes).
+
+        Args:
+            spec_id: The spec identifier.
+            results: List of SampleResult-like objects.
+            pipeline_stages: List of stage config dicts with model/adapter/etc.
+            spec_yaml: Raw YAML spec text for reproducibility.
+            analysis_results: Optional dict mapping oracle_name -> analysis dict.
+
+        Returns:
+            The run ID.
+        """
+        run_id = self.start_run(
+            spec_id=spec_id,
+            n_variants=len(results),
+            n_oracles=len(results[0].evaluations) if results else 0,
+            spec_yaml=spec_yaml,
+        )
+
+        conn = self._get_conn()
+        try:
+            # Pipeline stages
+            for i, stage in enumerate(pipeline_stages):
+                conn.execute(
+                    """INSERT INTO pipeline_stages
+                       (run_id, stage_index, model, adapter, temperature, top_p, max_tokens)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        run_id, i, stage["model"], stage["adapter"],
+                        stage.get("temperature"), stage.get("top_p"),
+                        stage.get("max_tokens"),
+                    ),
+                )
+
+            # Samples + evaluations
+            for i, result in enumerate(results):
+                cur = conn.execute(
+                    """INSERT INTO samples (run_id, sample_index, sample_params,
+                                           original_prompt, final_response)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        run_id, i, json.dumps(result.sample_params),
+                        result.original_prompt, result.final_response,
+                    ),
+                )
+                sample_id = cur.lastrowid
+                for oracle_name, ev in result.evaluations.items():
+                    score = ev.score if hasattr(ev, "score") else ev["score"]
+                    explanation = (
+                        ev.explanation if hasattr(ev, "explanation")
+                        else ev.get("explanation")
+                    )
+                    conn.execute(
+                        """INSERT INTO evaluations
+                           (sample_id, oracle_name, score, explanation)
+                           VALUES (?, ?, ?, ?)""",
+                        (sample_id, oracle_name, score, explanation),
+                    )
+
+            # Analysis results
+            if analysis_results:
+                now = datetime.now(timezone.utc).isoformat()
+                for oracle_name, result_dict in analysis_results.items():
+                    conn.execute(
+                        """INSERT INTO analysis_results
+                           (run_id, oracle_name, analysis_type, result_json, created_at)
+                           VALUES (?, ?, 'population_quality', ?, ?)""",
+                        (run_id, oracle_name, json.dumps(result_dict), now),
+                    )
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+        self.finish_run(run_id)
+        return run_id
+
+    # ── Low-level write operations ────────────────────────────────────
 
     def start_run(
         self,
         spec_id: str,
         n_variants: int,
         n_oracles: int,
-        spec_yaml: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        spec_yaml: str | None = None,
+        metadata: dict | None = None,
     ) -> int:
         """Create a new run record and return its ID."""
         conn = self._get_conn()
@@ -138,7 +237,7 @@ class RunStore:
                VALUES (?, ?, ?, ?, 'running', ?, ?)""",
             (
                 spec_id,
-                datetime.now().isoformat(),
+                datetime.now(timezone.utc).isoformat(),
                 n_variants,
                 n_oracles,
                 spec_yaml,
@@ -148,25 +247,29 @@ class RunStore:
         conn.commit()
         return cur.lastrowid
 
-    def save_pipeline_stages(self, run_id: int, stages: List[dict]):
+    def save_pipeline_stages(self, run_id: int, stages: list[dict]) -> None:
         """Save pipeline stage configurations for a run."""
         conn = self._get_conn()
-        for i, stage in enumerate(stages):
-            conn.execute(
-                """INSERT INTO pipeline_stages
-                   (run_id, stage_index, model, adapter, temperature, top_p, max_tokens)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    run_id,
-                    i,
-                    stage["model"],
-                    stage["adapter"],
-                    stage.get("temperature"),
-                    stage.get("top_p"),
-                    stage.get("max_tokens"),
-                ),
-            )
-        conn.commit()
+        try:
+            for i, stage in enumerate(stages):
+                conn.execute(
+                    """INSERT INTO pipeline_stages
+                       (run_id, stage_index, model, adapter, temperature, top_p, max_tokens)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        run_id,
+                        i,
+                        stage["model"],
+                        stage["adapter"],
+                        stage.get("temperature"),
+                        stage.get("top_p"),
+                        stage.get("max_tokens"),
+                    ),
+                )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
     def save_sample(
         self,
@@ -175,44 +278,48 @@ class RunStore:
         sample_params: dict,
         original_prompt: str,
         final_response: str,
-        evaluations: Dict[str, dict],
+        evaluations: dict[str, dict],
     ) -> int:
         """Save a sample result with its evaluations. Returns sample ID."""
         conn = self._get_conn()
-        cur = conn.execute(
-            """INSERT INTO samples (run_id, sample_index, sample_params,
-                                   original_prompt, final_response)
-               VALUES (?, ?, ?, ?, ?)""",
-            (
-                run_id,
-                sample_index,
-                json.dumps(sample_params),
-                original_prompt,
-                final_response,
-            ),
-        )
-        sample_id = cur.lastrowid
-
-        for oracle_name, eval_data in evaluations.items():
-            conn.execute(
-                """INSERT INTO evaluations (sample_id, oracle_name, score, explanation)
-                   VALUES (?, ?, ?, ?)""",
+        try:
+            cur = conn.execute(
+                """INSERT INTO samples (run_id, sample_index, sample_params,
+                                       original_prompt, final_response)
+                   VALUES (?, ?, ?, ?, ?)""",
                 (
-                    sample_id,
-                    oracle_name,
-                    eval_data["score"],
-                    eval_data.get("explanation"),
+                    run_id,
+                    sample_index,
+                    json.dumps(sample_params),
+                    original_prompt,
+                    final_response,
                 ),
             )
-        conn.commit()
-        return sample_id
+            sample_id = cur.lastrowid
+
+            for oracle_name, eval_data in evaluations.items():
+                conn.execute(
+                    """INSERT INTO evaluations (sample_id, oracle_name, score, explanation)
+                       VALUES (?, ?, ?, ?)""",
+                    (
+                        sample_id,
+                        oracle_name,
+                        eval_data["score"],
+                        eval_data.get("explanation"),
+                    ),
+                )
+            conn.commit()
+            return sample_id
+        except Exception:
+            conn.rollback()
+            raise
 
     def finish_run(self, run_id: int, status: str = "completed"):
         """Mark a run as finished."""
         conn = self._get_conn()
         conn.execute(
             "UPDATE runs SET finished_at = ?, status = ? WHERE id = ?",
-            (datetime.now().isoformat(), status, run_id),
+            (datetime.now(timezone.utc).isoformat(), status, run_id),
         )
         conn.commit()
 
@@ -234,14 +341,14 @@ class RunStore:
                 oracle_name,
                 analysis_type,
                 json.dumps(result),
-                datetime.now().isoformat(),
+                datetime.now(timezone.utc).isoformat(),
             ),
         )
         conn.commit()
 
     # ── Read operations ───────────────────────────────────────────────
 
-    def list_runs(self, limit: int = 20) -> List[dict]:
+    def list_runs(self, limit: int = 20) -> list[dict]:
         """List recent runs."""
         conn = self._get_conn()
         rows = conn.execute(
@@ -252,13 +359,13 @@ class RunStore:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_run(self, run_id: int) -> Optional[dict]:
+    def get_run(self, run_id: int) -> dict | None:
         """Get a single run by ID."""
         conn = self._get_conn()
         row = conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
         return dict(row) if row else None
 
-    def get_samples(self, run_id: int) -> List[dict]:
+    def get_samples(self, run_id: int) -> list[dict]:
         """Get all samples for a run, including evaluations."""
         conn = self._get_conn()
         samples = conn.execute(
@@ -285,8 +392,8 @@ class RunStore:
         return result
 
     def get_scores(
-        self, run_id: int, oracle_name: Optional[str] = None
-    ) -> List[dict]:
+        self, run_id: int, oracle_name: str | None = None
+    ) -> list[dict]:
         """Get scores for a run, optionally filtered by oracle."""
         conn = self._get_conn()
         if oracle_name:
@@ -318,7 +425,7 @@ class RunStore:
             for r in rows
         ]
 
-    def get_analysis(self, run_id: int) -> List[dict]:
+    def get_analysis(self, run_id: int) -> list[dict]:
         """Get analysis results for a run."""
         conn = self._get_conn()
         rows = conn.execute(
@@ -338,24 +445,29 @@ class RunStore:
 
     def export_for_finetuning(
         self,
-        run_id: Optional[int] = None,
+        run_id: int | None = None,
         min_score: float = 4.0,
-        oracle_name: Optional[str] = None,
-    ) -> List[dict]:
-        """Export prompt/response pairs for fine-tuning.
+        oracle_name: str | None = None,
+        format: str = "raw",
+    ) -> list[dict]:
+        """Export unique prompt/response pairs for fine-tuning.
 
-        Returns pairs where at least one oracle scored >= min_score.
+        Returns one entry per sample where at least one matching oracle
+        scored >= min_score. Each entry includes all qualifying oracle
+        scores to avoid duplicate training examples.
 
         Args:
             run_id: Filter to a specific run. If None, searches all runs.
             min_score: Minimum score threshold for inclusion.
             oracle_name: Filter to a specific oracle's scores.
+            format: Output format -- "raw" (default), "openai" (chat completions),
+                or "messages" (generic chat format).
         """
         conn = self._get_conn()
 
-        query = """
-            SELECT DISTINCT s.original_prompt, s.final_response,
-                   s.sample_params, e.oracle_name, e.score
+        # Find sample IDs where at least one qualifying eval meets threshold
+        id_query = """
+            SELECT DISTINCT s.id
             FROM samples s
             JOIN evaluations e ON e.sample_id = s.id
             WHERE e.score >= ?
@@ -363,22 +475,72 @@ class RunStore:
         params: list = [min_score]
 
         if run_id is not None:
-            query += " AND s.run_id = ?"
+            id_query += " AND s.run_id = ?"
             params.append(run_id)
         if oracle_name is not None:
-            query += " AND e.oracle_name = ?"
+            id_query += " AND e.oracle_name = ?"
             params.append(oracle_name)
 
-        query += " ORDER BY e.score DESC"
-        rows = conn.execute(query, params).fetchall()
-
-        return [
-            {
-                "prompt": r["original_prompt"],
-                "response": r["final_response"],
-                "sample_params": json.loads(r["sample_params"]),
-                "oracle_name": r["oracle_name"],
-                "score": r["score"],
-            }
-            for r in rows
+        sample_ids = [
+            r["id"] for r in conn.execute(id_query, params).fetchall()
         ]
+
+        if not sample_ids:
+            return []
+
+        # Fetch full sample + evaluation data for qualifying samples
+        placeholders = ",".join("?" * len(sample_ids))
+        rows = conn.execute(
+            f"""SELECT s.id, s.original_prompt, s.final_response, s.sample_params,
+                       e.oracle_name, e.score
+                FROM samples s
+                JOIN evaluations e ON e.sample_id = s.id
+                WHERE s.id IN ({placeholders})
+                ORDER BY s.id, e.score DESC""",
+            sample_ids,
+        ).fetchall()
+
+        # Group by sample to produce one entry per unique prompt/response
+        samples: dict[int, dict] = {}
+        for r in rows:
+            sid = r["id"]
+            if sid not in samples:
+                samples[sid] = {
+                    "prompt": r["original_prompt"],
+                    "response": r["final_response"],
+                    "sample_params": json.loads(r["sample_params"]),
+                    "scores": {},
+                }
+            samples[sid]["scores"][r["oracle_name"]] = r["score"]
+
+        result = sorted(
+            samples.values(),
+            key=lambda s: max(s["scores"].values()),
+            reverse=True,
+        )
+
+        if format == "openai":
+            return [
+                {
+                    "messages": [
+                        {"role": "user", "content": s["prompt"]},
+                        {"role": "assistant", "content": s["response"]},
+                    ]
+                }
+                for s in result
+            ]
+        elif format == "messages":
+            return [
+                {
+                    "prompt": s["prompt"],
+                    "response": s["response"],
+                    "messages": [
+                        {"role": "user", "content": s["prompt"]},
+                        {"role": "assistant", "content": s["response"]},
+                    ],
+                    "scores": s["scores"],
+                }
+                for s in result
+            ]
+
+        return result

@@ -1,13 +1,11 @@
 """Tests for the SQLite storage module."""
 
-import json
-import sqlite3
-import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from metareason.storage.store import RunStore
+from metareason.storage import RunStore
 
 
 @pytest.fixture
@@ -20,6 +18,19 @@ def store(db_path):
     s = RunStore(db_path)
     yield s
     s.close()
+
+
+def _make_sample_result(prompt, response, evaluations):
+    """Create a SampleResult-like object for testing save_run_results."""
+    evals = {}
+    for name, score in evaluations.items():
+        evals[name] = SimpleNamespace(score=score, explanation=f"Score {score}")
+    return SimpleNamespace(
+        sample_params={"style": "formal"},
+        original_prompt=prompt,
+        final_response=response,
+        evaluations=evals,
+    )
 
 
 class TestRunLifecycle:
@@ -58,6 +69,19 @@ class TestRunLifecycle:
     def test_get_run_not_found(self, store):
         assert store.get_run(999) is None
 
+    def test_start_run_with_spec_yaml(self, store):
+        run_id = store.start_run(
+            "test-spec", n_variants=1, n_oracles=1,
+            spec_yaml="spec_id: test\nn_variants: 1",
+        )
+        run = store.get_run(run_id)
+        assert run["spec_yaml"] == "spec_id: test\nn_variants: 1"
+
+    def test_timestamps_are_utc(self, store):
+        run_id = store.start_run("test", n_variants=1, n_oracles=1)
+        run = store.get_run(run_id)
+        assert "+00:00" in run["started_at"]
+
 
 class TestPipelineStages:
     def test_save_pipeline_stages(self, store):
@@ -78,7 +102,6 @@ class TestPipelineStages:
         ]
         store.save_pipeline_stages(run_id, stages)
 
-        # Verify via raw SQL
         conn = store._get_conn()
         rows = conn.execute(
             "SELECT * FROM pipeline_stages WHERE run_id = ? ORDER BY stage_index",
@@ -87,6 +110,22 @@ class TestPipelineStages:
         assert len(rows) == 2
         assert rows[0]["model"] == "gpt-4"
         assert rows[1]["model"] == "gpt-3.5-turbo"
+
+    def test_save_pipeline_stages_rollback_on_error(self, store):
+        run_id = store.start_run("test", n_variants=1, n_oracles=1)
+        stages = [
+            {"model": "gpt-4", "adapter": "openai"},
+            {"bad_key": "missing model"},  # will KeyError
+        ]
+        with pytest.raises(KeyError):
+            store.save_pipeline_stages(run_id, stages)
+
+        # Verify nothing was committed
+        conn = store._get_conn()
+        rows = conn.execute(
+            "SELECT * FROM pipeline_stages WHERE run_id = ?", (run_id,)
+        ).fetchall()
+        assert len(rows) == 0
 
 
 class TestSampleStorage:
@@ -141,6 +180,22 @@ class TestSampleStorage:
         )
         samples = store.get_samples(run_id)
         assert samples[0]["evaluations"]["judge"]["explanation"] is None
+
+    def test_save_sample_rollback_on_error(self, store):
+        run_id = store.start_run("test", n_variants=1, n_oracles=1)
+        with pytest.raises(KeyError):
+            store.save_sample(
+                run_id=run_id,
+                sample_index=0,
+                sample_params={},
+                original_prompt="Hi",
+                final_response="Hello",
+                evaluations={"judge": {"missing_score_key": 3.0}},
+            )
+
+        # Verify no partial data
+        samples = store.get_samples(run_id)
+        assert len(samples) == 0
 
 
 class TestAnalysisStorage:
@@ -215,7 +270,9 @@ class TestExportForFinetuning:
         self._populate(store)
         pairs = store.export_for_finetuning()
         assert len(pairs) == 2  # scores 4.0 and 5.0
-        assert all(p["score"] >= 4.0 for p in pairs)
+        # Each pair should have a scores dict, not a flat score
+        assert all("scores" in p for p in pairs)
+        assert all(max(p["scores"].values()) >= 4.0 for p in pairs)
 
     def test_export_custom_threshold(self, store):
         self._populate(store)
@@ -238,19 +295,120 @@ class TestExportForFinetuning:
         pairs = store.export_for_finetuning(run_id=run_id)
         assert all(p["prompt"].startswith("Prompt") for p in pairs)
 
-    def test_export_format(self, store):
+    def test_export_raw_format(self, store):
         self._populate(store)
         pairs = store.export_for_finetuning(min_score=5.0)
         assert len(pairs) == 1
         p = pairs[0]
         assert "prompt" in p
         assert "response" in p
-        assert "score" in p
-        assert "oracle_name" in p
+        assert "scores" in p
         assert "sample_params" in p
 
+    def test_export_no_duplicates_with_multi_oracle(self, store):
+        """A sample with 2 oracles above threshold should produce only 1 row."""
+        run_id = store.start_run("test", n_variants=1, n_oracles=2)
+        store.save_sample(
+            run_id=run_id,
+            sample_index=0,
+            sample_params={"idx": 0},
+            original_prompt="Prompt",
+            final_response="Response",
+            evaluations={
+                "judge_a": {"score": 5.0},
+                "judge_b": {"score": 4.5},
+            },
+        )
 
-class TestContextManager:
+        pairs = store.export_for_finetuning(min_score=4.0)
+        assert len(pairs) == 1
+        assert pairs[0]["scores"] == {"judge_a": 5.0, "judge_b": 4.5}
+
+    def test_export_openai_format(self, store):
+        self._populate(store)
+        pairs = store.export_for_finetuning(min_score=5.0, format="openai")
+        assert len(pairs) == 1
+        p = pairs[0]
+        assert "messages" in p
+        assert len(p["messages"]) == 2
+        assert p["messages"][0]["role"] == "user"
+        assert p["messages"][1]["role"] == "assistant"
+
+    def test_export_messages_format(self, store):
+        self._populate(store)
+        pairs = store.export_for_finetuning(min_score=5.0, format="messages")
+        assert len(pairs) == 1
+        p = pairs[0]
+        assert "messages" in p
+        assert "prompt" in p
+        assert "scores" in p
+
+
+class TestSaveRunResults:
+    def test_save_run_results(self, store):
+        results = [
+            _make_sample_result("Hello", "Hi there", {"judge": 4.5}),
+            _make_sample_result("Bye", "Goodbye", {"judge": 3.0}),
+        ]
+        stages = [{"model": "gpt-4", "adapter": "openai", "temperature": 0.7}]
+
+        run_id = store.save_run_results(
+            spec_id="test-spec",
+            results=results,
+            pipeline_stages=stages,
+            spec_yaml="spec_id: test-spec",
+        )
+
+        run = store.get_run(run_id)
+        assert run["status"] == "completed"
+        assert run["spec_yaml"] == "spec_id: test-spec"
+        assert run["n_variants"] == 2
+
+        samples = store.get_samples(run_id)
+        assert len(samples) == 2
+        assert samples[0]["evaluations"]["judge"]["score"] == 4.5
+
+    def test_save_run_results_with_analysis(self, store):
+        results = [_make_sample_result("Hi", "Hello", {"judge": 4.0})]
+        stages = [{"model": "gpt-4", "adapter": "openai"}]
+        analysis = {"judge": {"population_mean": 4.0, "hdi_lower": 3.5}}
+
+        run_id = store.save_run_results(
+            spec_id="test",
+            results=results,
+            pipeline_stages=stages,
+            analysis_results=analysis,
+        )
+
+        analyses = store.get_analysis(run_id)
+        assert len(analyses) == 1
+        assert analyses[0]["result"]["population_mean"] == 4.0
+
+    def test_save_run_results_is_atomic(self, store):
+        """If saving fails mid-way, nothing should be committed."""
+        results = [
+            _make_sample_result("Hi", "Hello", {"judge": 4.0}),
+        ]
+        # Bad stage data will cause a KeyError
+        bad_stages = [{"bad_key": "missing model"}]
+
+        with pytest.raises(KeyError):
+            store.save_run_results(
+                spec_id="test",
+                results=results,
+                pipeline_stages=bad_stages,
+            )
+
+        # The run was created via start_run (committed),
+        # but pipeline_stages+samples should have been rolled back
+        runs = store.list_runs()
+        assert len(runs) == 1
+        # No samples saved
+        samples = store.get_samples(runs[0]["id"])
+        assert len(samples) == 0
+
+
+class TestConnectionLifecycle:
     def test_context_manager(self, db_path):
         with RunStore(db_path) as store:
             run_id = store.start_run("test", n_variants=1, n_oracles=1)
@@ -259,6 +417,17 @@ class TestContextManager:
         with RunStore(db_path) as store:
             runs = store.list_runs()
             assert len(runs) == 1
+
+    def test_use_after_close_raises(self, db_path):
+        store = RunStore(db_path)
+        store.close()
+        with pytest.raises(RuntimeError, match="closed"):
+            store.start_run("test", n_variants=1, n_oracles=1)
+
+    def test_close_is_idempotent(self, db_path):
+        store = RunStore(db_path)
+        store.close()
+        store.close()  # should not raise
 
 
 class TestSchemaIdempotency:
@@ -285,3 +454,15 @@ class TestSchemaIdempotency:
         fk = conn.execute("PRAGMA foreign_keys").fetchone()[0]
         assert fk == 1
         store.close()
+
+    def test_schema_version_mismatch_raises(self, db_path):
+        """Opening a DB with a different schema version should raise."""
+        store = RunStore(db_path)
+        # Manually change the version
+        conn = store._get_conn()
+        conn.execute("UPDATE schema_version SET version = 999")
+        conn.commit()
+        store.close()
+
+        with pytest.raises(RuntimeError, match="Migration required"):
+            RunStore(db_path)
