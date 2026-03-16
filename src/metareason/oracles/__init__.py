@@ -5,6 +5,7 @@ from .oracle_base import (
     OracleBase,
     OracleException,
 )
+from .regex_oracle import RegexOracle
 
 __all__ = [
     "EvaluationContext",
@@ -12,4 +13,5 @@ __all__ = [
     "OracleBase",
     "OracleException",
     "LLMJudge",
+    "RegexOracle",
 ]

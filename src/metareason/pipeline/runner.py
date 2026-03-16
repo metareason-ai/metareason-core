@@ -9,7 +9,7 @@ from metareason.adapters.adapter_factory import get_adapter
 
 from ..adapters import AdapterRequest
 from ..config import SpecConfig
-from ..oracles import EvaluationContext, EvaluationResult, LLMJudge
+from ..oracles import EvaluationContext, EvaluationResult, LLMJudge, RegexOracle
 from ..sampling import LhsSampler
 from . import TemplateRenderer, load_spec
 
@@ -49,6 +49,8 @@ async def run(spec_path: Path) -> List[SampleResult]:
     for oracle_name, oracle_config in spec_config.oracles.items():
         if oracle_config.type == "llm_judge":
             oracles[oracle_name] = LLMJudge(oracle_config)
+        elif oracle_config.type == "regex":
+            oracles[oracle_name] = RegexOracle(oracle_config)
         else:
             logger.warning(f"Unknown oracle type: {oracle_config.type}")
 

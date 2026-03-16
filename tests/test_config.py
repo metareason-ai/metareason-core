@@ -198,10 +198,20 @@ class TestOracleConfig:
     def test_invalid_type(self):
         with pytest.raises(ValidationError):
             OracleConfig(
-                type="regex",
+                type="unknown_oracle",
                 model="m",
                 adapter=AdapterConfig(name="ollama"),
             )
+
+    def test_regex_oracle_config(self):
+        cfg = OracleConfig(
+            type="regex",
+            patterns=["\\d+", "[A-Z]"],
+        )
+        assert cfg.type == "regex"
+        assert cfg.patterns == ["\\d+", "[A-Z]"]
+        assert cfg.model is None
+        assert cfg.adapter is None
 
 
 # --- BayesianAnalysisConfig ---

@@ -173,12 +173,13 @@ class OracleConfig(BaseModel):
         )
     """
 
-    type: Literal["llm_judge"]
-    model: str
-    adapter: AdapterConfig
+    type: Literal["llm_judge", "regex"]
+    model: Optional[str] = None
+    adapter: Optional[AdapterConfig] = None
     max_tokens: int = 2000
     temperature: Optional[float] = Field(default=1.0, ge=0.0, le=2.0)
     rubric: Optional[str] = None
+    patterns: Optional[List[str]] = None
 
 
 class BayesianAnalysisConfig(BaseModel):
