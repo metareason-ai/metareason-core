@@ -96,6 +96,167 @@ oracles: {}
         with pytest.raises(ValidationError):
             load_spec(spec_yaml)
 
+    def test_load_spec_with_file_references(self, tmp_path):
+        """file: prefixes in template and rubric fields are resolved."""
+        template_file = tmp_path / "template.txt"
+        template_file.write_text("Explain {{ topic }} clearly.")
+        rubric_file = tmp_path / "rubric.txt"
+        rubric_file.write_text('Rate 1-5. Return {"score": X, "explanation": "..."}')
+
+        spec_yaml = tmp_path / "spec.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: file-ref-spec
+pipeline:
+  - template: "file:template.txt"
+    adapter:
+      name: ollama
+    model: llama2
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 100
+sampling:
+  method: latin_hypercube
+  optimization: maximin
+n_variants: 3
+oracles:
+  judge:
+    type: llm_judge
+    model: llama2
+    adapter:
+      name: ollama
+    rubric: "file:rubric.txt"
+"""
+        )
+        spec = load_spec(spec_yaml)
+        assert spec.pipeline[0].template == "Explain {{ topic }} clearly."
+        assert spec.oracles["judge"].rubric == (
+            'Rate 1-5. Return {"score": X, "explanation": "..."}'
+        )
+
+    def test_load_spec_with_file_in_subdirectory(self, tmp_path):
+        """file: references can point to files in subdirectories."""
+        prompts_dir = tmp_path / "prompts"
+        prompts_dir.mkdir()
+        (prompts_dir / "main.txt").write_text("Hello from subdir")
+
+        spec_yaml = tmp_path / "spec.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: subdir-spec
+pipeline:
+  - template: "file:prompts/main.txt"
+    adapter:
+      name: ollama
+    model: llama2
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 100
+sampling:
+  method: latin_hypercube
+  optimization: maximin
+n_variants: 1
+oracles:
+  judge:
+    type: llm_judge
+    model: llama2
+    adapter:
+      name: ollama
+    rubric: "Score 1-5"
+"""
+        )
+        spec = load_spec(spec_yaml)
+        assert spec.pipeline[0].template == "Hello from subdir"
+
+    def test_load_spec_file_reference_not_found(self, tmp_path):
+        spec_yaml = tmp_path / "spec.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: missing-file
+pipeline:
+  - template: "file:nonexistent.txt"
+    adapter:
+      name: ollama
+    model: llama2
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 100
+sampling:
+  method: latin_hypercube
+  optimization: maximin
+n_variants: 1
+oracles:
+  judge:
+    type: llm_judge
+    model: llama2
+    adapter:
+      name: ollama
+    rubric: "Score 1-5"
+"""
+        )
+        with pytest.raises(FileNotFoundError):
+            load_spec(spec_yaml)
+
+    def test_load_spec_rejects_path_traversal(self, tmp_path):
+        spec_yaml = tmp_path / "spec.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: traversal
+pipeline:
+  - template: "file:../../etc/passwd"
+    adapter:
+      name: ollama
+    model: llama2
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 100
+sampling:
+  method: latin_hypercube
+  optimization: maximin
+n_variants: 1
+oracles:
+  judge:
+    type: llm_judge
+    model: llama2
+    adapter:
+      name: ollama
+    rubric: "Score 1-5"
+"""
+        )
+        with pytest.raises(ValueError, match="resolves outside"):
+            load_spec(spec_yaml)
+
+    def test_load_spec_inline_strings_unchanged(self, tmp_path):
+        """Strings without file: prefix are left as-is."""
+        spec_yaml = tmp_path / "spec.yaml"
+        spec_yaml.write_text(
+            """
+spec_id: inline-spec
+pipeline:
+  - template: "Just a normal template"
+    adapter:
+      name: ollama
+    model: llama2
+    temperature: 0.7
+    top_p: 0.9
+    max_tokens: 100
+sampling:
+  method: latin_hypercube
+  optimization: maximin
+n_variants: 1
+oracles:
+  judge:
+    type: llm_judge
+    model: llama2
+    adapter:
+      name: ollama
+    rubric: "Normal rubric"
+"""
+        )
+        spec = load_spec(spec_yaml)
+        assert spec.pipeline[0].template == "Just a normal template"
+        assert spec.oracles["judge"].rubric == "Normal rubric"
+
 
 # --- load_calibrate_spec ---
 
