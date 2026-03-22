@@ -1,19 +1,9 @@
 from pathlib import Path
-from typing import Union
+from typing import Any, Union
 
 import yaml
 
 from ..config import CalibrateConfig, CalibrateMultiConfig, SpecConfig
-
-
-def load_spec(file_path: Union[str, Path]) -> SpecConfig:
-    """Load and validate YAML specification file."""
-    path = Path(file_path)
-
-    with open(path, "r") as f:
-        data = yaml.safe_load(f)
-
-    return SpecConfig(**data)
 
 
 def _resolve_file_reference(value: str, base_dir: Path) -> str:
@@ -37,11 +27,26 @@ def _resolve_file_reference(value: str, base_dir: Path) -> str:
     return value
 
 
-def load_calibrate_spec(file_path: Union[str, Path]) -> CalibrateConfig:
-    """Load and validate a calibration YAML specification file.
+def _resolve_file_references(data: Any, base_dir: Path) -> Any:
+    """Recursively resolve all 'file:' prefixed strings in a parsed YAML structure.
 
-    Resolves 'file:' prefixes in prompt and response fields to load
-    content from external files (paths relative to the spec file).
+    Walks dicts, lists, and strings. Any string starting with 'file:' is replaced
+    with the contents of the referenced file (relative to base_dir).
+    """
+    if isinstance(data, dict):
+        return {k: _resolve_file_references(v, base_dir) for k, v in data.items()}
+    if isinstance(data, list):
+        return [_resolve_file_references(item, base_dir) for item in data]
+    if isinstance(data, str):
+        return _resolve_file_reference(data, base_dir)
+    return data
+
+
+def load_spec(file_path: Union[str, Path]) -> SpecConfig:
+    """Load and validate YAML specification file.
+
+    Resolves 'file:' prefixes in any string field to load content from
+    external files (paths relative to the spec file).
     """
     path = Path(file_path)
     base_dir = path.parent
@@ -49,11 +54,23 @@ def load_calibrate_spec(file_path: Union[str, Path]) -> CalibrateConfig:
     with open(path, "r") as f:
         data = yaml.safe_load(f)
 
-    if "prompt" in data:
-        data["prompt"] = _resolve_file_reference(data["prompt"], base_dir)
-    if "response" in data:
-        data["response"] = _resolve_file_reference(data["response"], base_dir)
+    data = _resolve_file_references(data, base_dir)
+    return SpecConfig(**data)
 
+
+def load_calibrate_spec(file_path: Union[str, Path]) -> CalibrateConfig:
+    """Load and validate a calibration YAML specification file.
+
+    Resolves 'file:' prefixes in any string field to load content from
+    external files (paths relative to the spec file).
+    """
+    path = Path(file_path)
+    base_dir = path.parent
+
+    with open(path, "r") as f:
+        data = yaml.safe_load(f)
+
+    data = _resolve_file_references(data, base_dir)
     return CalibrateConfig(**data)
 
 
@@ -62,8 +79,8 @@ def load_calibrate_multi_spec(
 ) -> CalibrateMultiConfig:
     """Load and validate a multi-judge calibration YAML specification file.
 
-    Resolves 'file:' prefixes in prompt and response fields to load
-    content from external files (paths relative to the spec file).
+    Resolves 'file:' prefixes in any string field to load content from
+    external files (paths relative to the spec file).
     """
     path = Path(file_path)
     base_dir = path.parent
@@ -71,9 +88,5 @@ def load_calibrate_multi_spec(
     with open(path, "r") as f:
         data = yaml.safe_load(f)
 
-    if "prompt" in data:
-        data["prompt"] = _resolve_file_reference(data["prompt"], base_dir)
-    if "response" in data:
-        data["response"] = _resolve_file_reference(data["response"], base_dir)
-
+    data = _resolve_file_references(data, base_dir)
     return CalibrateMultiConfig(**data)
