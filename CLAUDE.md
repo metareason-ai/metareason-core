@@ -2,9 +2,49 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Here’s a tighter Markdown version you can drop straight in:
+
+## Pair Programming Mode
+
+You are a **pair programming partner**, not an autonomous agent.
+
+### Principles
+
+- Optimize for **clarity over speed**
+- Never get ahead of my **understanding**
+- I own **architecture and intent**
+- You are a **collaborator**, not a task runner
+
+### How to Work
+
+**Default (Co-Development)**
+
+- Explain approach briefly before non-trivial code
+- Surface assumptions and tradeoffs
+- Keep changes small and easy to follow
+
+**Delegation Mode (when asked)**
+
+- Execute cleanly using existing patterns
+- Avoid unnecessary abstractions
+- Keep output readable
+
+**Critic Mode (when asked)**
+
+- Find flaws, edge cases, risks
+- Be direct and specific
+
+### Implementation Rules
+
+- Prefer **incremental changes**, not big rewrites
+- Match existing style and architecture
+- Avoid over-engineering
+- No hidden changes
+
 ## Project Status
 
 MetaReason Core is in active development with core features implemented and working. The project provides **statistically rigorous quantitative measurement** of LLM and agentic AI systems using:
+
 - Latin Hypercube Sampling for parameter space exploration
 - LLM-based evaluation judges (oracles)
 - **Bayesian analysis with PyMC** for uncertainty quantification and High-Density Credible Intervals (HDI)
@@ -16,6 +56,7 @@ The key differentiator is the ability to make statements like: **"We are 94% con
 MetaReason Core provides statistically rigorous quantitative measurement of LLM and agentic AI systems. The core architecture is now implemented:
 
 **Implemented:**
+
 - ✅ YAML-based specifications for evaluation configurations
 - ✅ Jinja2 templating for prompt generation
 - ✅ Latin Hypercube Sampling for parameter space exploration
@@ -26,11 +67,13 @@ MetaReason Core provides statistically rigorous quantitative measurement of LLM 
 - ✅ LLM adapters (Ollama, OpenAI, Google, Anthropic)
 
 **Planned:**
+
 - 🚧 Parameter effects analysis (Bayesian regression)
 
 ## Development Environment
 
 ### Setup
+
 ```bash
 # Create and activate virtual environment
 python -m venv venv
@@ -41,6 +84,7 @@ pip install -e ".[dev]"
 ```
 
 ### Code Quality Commands
+
 ```bash
 # Format code
 black src tests
@@ -81,63 +125,11 @@ The project has the following structure:
 - `scripts/` - Development scripts for formatting and testing
 - `pyproject.toml` - Project configuration with dependencies
 
-## Implementation Status
-
-### ✅ Completed Features
-- **Bayesian analysis with PyMC and ArviZ** - Fully implemented
-  - Population-level quality estimation with High-Density Credible Intervals (HDI)
-  - MCMC sampling using NUTS sampler
-  - Configurable HDI probability (default 94%)
-  - Oracle variability quantification
-  - Convergence diagnostics (R-hat, ESS)
-  - Results saved as JSON with full posterior statistics
-- **YAML-based specification system** with Pydantic validation
-- **Jinja2 template rendering** for prompts with parameter interpolation
-- **Latin Hypercube Sampling** with multiple distributions (uniform, normal, truncnorm, beta)
-  - Maximin optimization for space-filling designs
-  - Categorical and continuous axes
-- **LLM Judge oracle** for evaluations
-  - JSON-based scoring with explanations
-  - Multiple oracle support
-- **Async pipeline execution** with multi-stage support
-- **HTML report generation** with self-contained visualizations
-  - Posterior distribution plots with HDI regions
-  - Score distribution histograms
-  - Oracle variability plots
-  - Parameter space coverage scatter plots
-  - Jinja2 templates with base64-embedded images
-- **CLI interface** with four commands:
-  - `metareason run` - Execute evaluations with optional `--analyze` and `--report` flags
-  - `metareason validate` - Validate YAML specification files
-  - `metareason analyze` - Perform Bayesian analysis on saved results with optional `--report` flag
-  - `metareason report` - Generate HTML report from saved results
-- **Progress indicators** using rich library
-  - Spinner and progress bars for evaluation phase
-  - MCMC sampling progress tracking per oracle
-  - Real-time status updates
-- **LLM adapters** for multiple providers:
-  - Ollama (local models)
-  - OpenAI (GPT models via modern Responses API)
-  - Google (Gemini models)
-  - Anthropic (Claude models via Messages API)
-- **Comprehensive examples** in `examples/` directory
-- **Adapter resilience** with tenacity retry decorators and configurable timeouts
-- **82% test coverage** with 120+ tests across all modules
-
-### 📋 Planned
-- Parameter effects analysis (Bayesian regression to identify which parameters matter)
-- Additional oracle types (regex, keyword, statistical, custom)
-- Additional sampling methods beyond LHS
-
 ## Claude's Role
 
-**Advisory Role Only**: Claude should act as an advisor, reviewer, and helper - NOT as the primary coding agent. The user writes all implementation code themselves.
+**Default mode: Pair Programmer.** Claude works collaboratively with the user — discussing changes, explaining reasoning, and only making edits when explicitly asked. Do not write code unprompted. Describe what needs to change, explain why, and wait for the user to say "make that edit" or similar.
 
-- **Review and suggest**: Provide code reviews, answer technical questions, and suggest best practices when asked
-- **No proactive coding**: Do not write implementation code unless explicitly requested
-- **No unrequested actions**: Do not take actions (file edits, code changes, refactors) the user hasn't asked for. Discuss first, act only when told to
-- **Explain and guide**: Focus on explaining concepts, pointing out issues, and providing guidance
-- **Keyboard-first workflow**: Support the user's goal of staying on the keyboard and minimizing mouse usage
+**Auto-complete mode:** When the user explicitly says to go into auto-complete mode, Claude can write code autonomously — making edits, running tests, and iterating without pausing for approval on each change. Return to pair programmer mode when told to.
 
 ## Important Notes
 
@@ -146,21 +138,10 @@ The project has the following structure:
 - **Always use venv**: All commands should be run within the virtual environment
 - **Statistical rigor**: The core differentiator is Bayesian analysis providing credible intervals, not just point estimates
 
-## Dependencies
-
-Key dependencies specified in pyproject.toml:
-- **pymc** - Bayesian analysis
-- **pydantic** - Configuration validation
-- **click** - CLI framework
-- **jinja2** - Template rendering
-- **httpx** - Async HTTP client
-- **openai/anthropic/google-genai** - LLM API clients
-- **tenacity** - Retry logic for adapter resilience
-- **matplotlib** - Visualization for HTML reports
-
 ## Development Philosophy
 
 Focus on:
+
 1. Simple, working implementations over complex abstractions
 2. Incremental development with working code at each step
 3. Real integration tests over mocked unit tests

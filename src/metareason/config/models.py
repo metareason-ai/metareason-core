@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class AdapterConfig(BaseModel):
@@ -268,6 +268,21 @@ class SpecConfig(BaseModel):
     analysis: Optional[BayesianAnalysisConfig] = None
 
 
+class AutoCalibrationConfig(BaseModel):
+    """Configuration for auto-calibration loop.
+
+    Controls the iterative optimization of a judge's rubric by running
+    repeated calibrations and using an optimizer LLM to revise the rubric
+    until the judge converges on the expected score.
+    """
+
+    enabled: bool = True
+    max_iterations: int = Field(default=10, ge=1)
+    tolerance: float = Field(default=0.3, gt=0.0)
+    optimizer_model: str
+    optimizer_adapter: AdapterConfig
+
+
 class CalibrateConfig(BaseModel):
     """Configuration for LLM judge calibration.
 
@@ -294,6 +309,13 @@ class CalibrateConfig(BaseModel):
     repeats: int = Field(default=30, ge=1)
     oracle: OracleConfig
     analysis: Optional[BayesianAnalysisConfig] = None
+    auto_calibration: Optional[AutoCalibrationConfig] = None
+
+    @model_validator(mode="after")
+    def auto_calibration_requires_expected_score(self):
+        if self.auto_calibration is not None and self.expected_score is None:
+            raise ValueError("auto_calibration requires expected_score")
+        return self
 
 
 class CalibrateMultiConfig(BaseModel):

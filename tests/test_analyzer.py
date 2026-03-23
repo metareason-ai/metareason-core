@@ -118,6 +118,8 @@ class TestBayesianAnalyzerSampling:
             "oracle_noise_mean",
             "oracle_noise_hdi",
             "n_samples",
+            "posterior_samples",
+            "noise_posterior_samples",
         }
         assert set(result.keys()) == expected_keys
         assert result["n_samples"] == 5
@@ -479,6 +481,8 @@ class TestMultiJudgeQuality:
             "raw_score_mean",
             "raw_score_std",
             "consistency_weight",
+            "bias_posterior_samples",
+            "noise_posterior_samples",
         }
         for name in ["judge_a", "judge_b"]:
             assert name in result["judges"]

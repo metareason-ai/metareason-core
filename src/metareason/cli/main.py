@@ -437,9 +437,7 @@ def run(spec, output, analyze, report, db):
                 for stage in spec_config.pipeline
             ]
             db_analysis = (
-                analysis_results
-                if analyze and analysis_results is not None
-                else None
+                analysis_results if analyze and analysis_results is not None else None
             )
             store.save_run_results(
                 spec_id=spec_config.spec_id,
@@ -448,9 +446,7 @@ def run(spec, output, analyze, report, db):
                 spec_yaml=spec_path.read_text(),
                 analysis_results=db_analysis,
             )
-            console.print(
-                f"[green]✓ Run data saved to {db}[/green]"
-            )
+            console.print(f"[green]✓ Run data saved to {db}[/green]")
 
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
@@ -745,6 +741,97 @@ def display_calibration_results(result: dict, oracle_name: str, calibrate_config
             )
 
 
+def _run_auto_calibration(calibrate_config, spec_path, output, report):
+    """Run the auto-calibration loop and display results."""
+    from ..calibration.loop import AutoCalibrationLoop
+
+    if calibrate_config.expected_score is None:
+        console.print(
+            "[bold red]Error: auto-calibration requires expected_score "
+            "in the spec[/bold red]"
+        )
+        return
+
+    if calibrate_config.auto_calibration is None:
+        console.print(
+            "[bold red]Error: auto-calibration requires auto_calibration "
+            "config in the spec or use a spec with auto_calibration settings[/bold red]"
+        )
+        return
+
+    auto_config = calibrate_config.auto_calibration
+    console.print(
+        f"[bold blue]Auto-calibrating judge with spec:[/bold blue] {spec_path}"
+    )
+    console.print(
+        f"[dim]Max iterations: {auto_config.max_iterations}, "
+        f"tolerance: {auto_config.tolerance}, "
+        f"repeats per iteration: {calibrate_config.repeats}[/dim]\n"
+    )
+
+    loop = AutoCalibrationLoop(calibrate_config)
+    result = asyncio.run(loop.run())
+
+    # Display per-iteration progress
+    for entry in result.history:
+        cal = entry["cal_result"]
+        iteration = entry["iteration"]
+        bias = cal["bias_mean"]
+        mean = cal["raw_score_mean"]
+        console.print(
+            f"  Iteration {iteration}/{auto_config.max_iterations}: "
+            f"mean={mean:.2f}, expected={calibrate_config.expected_score}, "
+            f"bias={bias:+.2f}"
+        )
+
+    # Display outcome
+    console.print()
+    if result.converged:
+        console.print("[bold green]Converged![/bold green]")
+    else:
+        console.print(
+            f"[bold yellow]Did not converge after "
+            f"{result.iterations} iterations[/bold yellow]"
+        )
+
+    console.print(f"\n[dim]Original rubric:[/dim]\n{result.original_rubric}")
+    console.print(
+        f"\n[dim]Best rubric (bias {result.best_cal_result['bias_mean']:+.2f}):[/dim]"
+    )
+    console.print(result.best_rubric)
+
+    # Save results
+    if output:
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        results_data = {
+            "spec_id": calibrate_config.spec_id,
+            "expected_score": calibrate_config.expected_score,
+            "auto_calibration": {
+                "converged": result.converged,
+                "iterations": result.iterations,
+                "original_rubric": result.original_rubric,
+                "final_rubric": result.final_rubric,
+                "best_rubric": result.best_rubric,
+                "history": [
+                    {
+                        "iteration": h["iteration"],
+                        "rubric": h["rubric"],
+                        "scores": h["scores"],
+                        "bias_mean": h["cal_result"]["bias_mean"],
+                        "raw_score_mean": h["cal_result"]["raw_score_mean"],
+                    }
+                    for h in result.history
+                ],
+            },
+        }
+
+        with open(output_path, "w") as f:
+            json.dump(results_data, f, indent=2)
+        console.print(f"\n[green]Results saved to {output_path}[/green]")
+
+
 @metareason.command()
 @click.argument("spec")
 @click.option("--output", "-o", help="Output file for results (JSON format)")
@@ -753,11 +840,26 @@ def display_calibration_results(result: dict, oracle_name: str, calibrate_config
     is_flag=True,
     help="Generate HTML report",
 )
-def calibrate(spec, output, report):
+@click.option(
+    "--auto-calibrate",
+    is_flag=True,
+    help="Run auto-calibration loop to iteratively optimize the judge rubric",
+)
+def calibrate(spec, output, report, auto_calibrate):
     """Calibrate an LLM judge by measuring scoring consistency and reliability."""
     try:
         spec_path = Path(spec)
         calibrate_config = load_calibrate_spec(spec_path)
+
+        # Auto-calibration: detect from --auto-calibrate flag or spec config
+        auto_enabled = auto_calibrate or (
+            calibrate_config.auto_calibration is not None
+            and calibrate_config.auto_calibration.enabled
+        )
+
+        if auto_enabled:
+            _run_auto_calibration(calibrate_config, spec_path, output, report)
+            return
 
         console.print(
             f"[bold blue]Calibrating judge with spec:[/bold blue] {spec_path}"
@@ -1307,8 +1409,7 @@ def db_export(ctx, run_id, min_score, oracle, output, fmt):
                 scores = pair.get("scores", {})
                 best = max(scores.values()) if scores else 0
                 console.print(
-                    f"[cyan]Score {best:.1f}[/cyan]: "
-                    f"{pair['prompt'][:80]}..."
+                    f"[cyan]Score {best:.1f}[/cyan]: " f"{pair['prompt'][:80]}..."
                 )
 
 

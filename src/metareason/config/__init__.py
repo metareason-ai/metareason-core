@@ -1,4 +1,5 @@
 from .models import (
+    AutoCalibrationConfig,
     AxisConfig,
     CalibrateConfig,
     CalibrateMultiConfig,
@@ -10,6 +11,7 @@ __all__ = [
     "SpecConfig",
     "CalibrateConfig",
     "CalibrateMultiConfig",
+    "AutoCalibrationConfig",
     "AxisConfig",
     "OracleConfig",
 ]

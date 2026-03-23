@@ -1,0 +1,40 @@
+spec_id: auto_calibration_v1
+type: calibrate
+prompt: "Explain why the sky is blue in two sentences."
+response: |
+  The sky appears blue because molecules in Earth's atmosphere scatter shorter
+  wavelengths of sunlight (blue and violet) more than longer wavelengths like
+  red and orange. Since our eyes are more sensitive to blue light and violet
+  light is largely absorbed higher in the atmosphere, we perceive the sky as blue.
+expected_score: 5
+repeats: 10
+oracle:
+  type: llm_judge
+  model: gemma3:27b
+  adapter:
+    name: ollama
+  rubric: |
+    Evaluate whether the response demonstrates creative and engaging writing.
+    Penalize dry, textbook-like explanations that lack personality.
+    Reward responses that use metaphors, analogies, or storytelling.
+
+    1 = Reads like a textbook
+    2 = Factually adequate but boring
+    3 = Some attempt at engagement
+    4 = Mostly engaging with minor dull sections
+    5 = Captivating and creative throughout
+
+    First, list strengths. Then list weaknesses. Then score.
+    Return JSON: {"strengths": [...], "weaknesses": [...], "score": X, "explanation": "..."}
+auto_calibration:
+  enabled: true
+  max_iterations: 5
+  tolerance: 0.3
+  optimizer_model: claude-sonnet-4-6
+  optimizer_adapter:
+    name: anthropic
+analysis:
+  hdi_probability: 0.94
+  mcmc_draws: 1000
+  mcmc_chains: 2
+  mcmc_tune: 500
