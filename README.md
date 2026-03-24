@@ -10,28 +10,8 @@ Standard LLM evaluation tools produce a single number — "Average Quality: 4.2"
 
 ## Architecture
 
-```mermaid
-graph LR
-    A[YAML Spec File] --> B[1. Sampler<br/>Latin Hypercube]
-    B --> C[Parameter Sets]
-    C --> D[2. Template Engine<br/>Jinja2]
-    D --> E[3. LLM Pipeline<br/>Executor]
-    E --> F[LLM Outputs]
-    F --> G[4. Oracle Judges<br/>LLM/Custom]
-    G --> H[Raw Scores]
-    H --> I[5. Bayesian Analyzer<br/>PyMC MCMC]
-    I --> J[Statistical Report<br/>JSON + HDI]
-
-    style A fill:#e1f5ff
-    style B fill:#fff4e1
-    style C fill:#fff4e1
-    style D fill:#e8f5e9
-    style E fill:#e8f5e9
-    style F fill:#e8f5e9
-    style G fill:#f3e5f5
-    style H fill:#f3e5f5
-    style I fill:#fce4ec
-    style J fill:#fce4ec
+```
+YAML Spec → LHS Sampling → Jinja2 Templating → Async LLM Execution → Oracle Scoring → Bayesian Analysis → Report
 ```
 
 1. **YAML Spec** — defines evaluation parameters, sampling strategy, and oracles
@@ -41,6 +21,31 @@ graph LR
 5. **Oracle Judges** — evaluates outputs (LLM judges, regex, custom metrics)
 6. **Bayesian Analyzer** — performs MCMC sampling to estimate true quality with uncertainty
 7. **Statistical Report** — provides HDI intervals and diagnostic metrics
+
+## Features
+
+**Bayesian analysis** — PyMC hierarchical models with High-Density Credible Intervals, population-level quality estimates, oracle variability measurement, and configurable probability mass (default 94%)
+
+**YAML-based specifications** — Pydantic-validated configs defining the full evaluation pipeline
+
+**Latin Hypercube Sampling** — space-filling experimental designs with uniform, normal, truncated normal, beta, and categorical distributions; maximin optimization
+
+**Multi-stage pipelines** — async execution with Jinja2 templating; each stage chains to the next
+
+**Oracle evaluation** — LLM-as-judge (JSON score + explanation) and regex-based pattern matching with linear score interpolation
+
+**LLM adapters** — Ollama, OpenAI, Google (Gemini), and Anthropic (Claude)
+
+**Auto-calibration** — iterative rubric optimization for judge oracles with convergence checking
+
+**HTML reports** — self-contained reports with posterior distributions, score histograms, oracle variability plots, and parameter space coverage
+
+**CLI** — `run`, `validate`, `analyze`, `report`, `calibrate`, `calibrate-multi`
+
+### Roadmap
+
+- Parameter effects analysis via Bayesian regression
+- Additional sampling methods
 
 ## Quick Start
 
@@ -154,31 +159,6 @@ Population Statistics:
 Oracle Variability: 0.36 (94% HDI: [0.21, 0.54])
 Based on 10 evaluations
 ```
-
-## Features
-
-**Bayesian analysis** — PyMC hierarchical models with High-Density Credible Intervals, population-level quality estimates, oracle variability measurement, and configurable probability mass (default 94%)
-
-**YAML-based specifications** — Pydantic-validated configs defining the full evaluation pipeline
-
-**Latin Hypercube Sampling** — space-filling experimental designs with uniform, normal, truncated normal, beta, and categorical distributions; maximin optimization
-
-**Multi-stage pipelines** — async execution with Jinja2 templating; each stage chains to the next
-
-**Oracle evaluation** — LLM-as-judge (JSON score + explanation) and regex-based pattern matching with linear score interpolation
-
-**LLM adapters** — Ollama, OpenAI, Google (Gemini), and Anthropic (Claude)
-
-**Auto-calibration** — iterative rubric optimization for judge oracles with convergence checking
-
-**HTML reports** — self-contained reports with posterior distributions, score histograms, oracle variability plots, and parameter space coverage
-
-**CLI** — `run`, `validate`, `analyze`, `report`, `calibrate`, `calibrate-multi`
-
-### Roadmap
-
-- Parameter effects analysis via Bayesian regression
-- Additional sampling methods
 
 ## Development
 
