@@ -2,148 +2,81 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Here’s a tighter Markdown version you can drop straight in:
-
-## Pair Programming Mode
-
-You are a **pair programming partner**, not an autonomous agent.
-
-### Principles
-
-- Optimize for **clarity over speed**
-- Never get ahead of my **understanding**
-- I own **architecture and intent**
-- You are a **collaborator**, not a task runner
-
-### How to Work
-
-**Default (Co-Development)**
-
-- Explain approach briefly before non-trivial code
-- Surface assumptions and tradeoffs
-- Keep changes small and easy to follow
-
-**Delegation Mode (when asked)**
-
-- Execute cleanly using existing patterns
-- Avoid unnecessary abstractions
-- Keep output readable
-
-**Critic Mode (when asked)**
-
-- Find flaws, edge cases, risks
-- Be direct and specific
-
-### Implementation Rules
-
-- Prefer **incremental changes**, not big rewrites
-- Match existing style and architecture
-- Avoid over-engineering
-- No hidden changes
-
-## Project Status
-
-MetaReason Core is in active development with core features implemented and working. The project provides **statistically rigorous quantitative measurement** of LLM and agentic AI systems using:
-
-- Latin Hypercube Sampling for parameter space exploration
-- LLM-based evaluation judges (oracles)
-- **Bayesian analysis with PyMC** for uncertainty quantification and High-Density Credible Intervals (HDI)
-
-The key differentiator is the ability to make statements like: **"We are 94% confident the true quality is between 4.65 and 5.10"** rather than just providing point estimates.
-
-## Project Vision
-
-MetaReason Core provides statistically rigorous quantitative measurement of LLM and agentic AI systems. The core architecture is now implemented:
-
-**Implemented:**
-
-- ✅ YAML-based specifications for evaluation configurations
-- ✅ Jinja2 templating for prompt generation
-- ✅ Latin Hypercube Sampling for parameter space exploration
-- ✅ LLM Judges for evaluation
-- ✅ Bayesian analysis for statistical rigor (PyMC + ArviZ)
-- ✅ Pipeline-based execution model (async, multi-stage)
-- ✅ CLI interface with progress indicators
-- ✅ LLM adapters (Ollama, OpenAI, Google, Anthropic)
-
-**Planned:**
-
-- 🚧 Parameter effects analysis (Bayesian regression)
-
-## Development Environment
-
-### Setup
+## Build & Run Commands
 
 ```bash
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate
-
-# Install development dependencies
+# Install (dev mode with all dependencies)
 pip install -e ".[dev]"
-```
 
-### Code Quality Commands
+# Run full test suite (80% coverage enforced)
+pytest
 
-```bash
+# Run a single test file
+pytest tests/test_adapters.py -v
+
+# Run a specific test
+pytest tests/test_cli.py::TestReportCommand::test_method -v
+
+# Skip slow tests
+pytest -m "not slow"
+
 # Format code
-black src tests
+black src tests && isort src tests
 
-# Sort imports
-isort src tests
-
-# Run linting
+# Lint
 flake8 src tests
 
-# Security checks
+# Security scan
 bandit -r src
 
-# Run all formatting
-./scripts/format.sh
+# Validate a spec file
+metareason validate examples/quantum_entanglement_eval.yml
 
-# Run tests
-./scripts/test.sh
+# Run an evaluation
+metareason run examples/quantum_entanglement_eval.yml --analyze --report
 ```
 
-## Project Structure
+## Architecture
 
-The project has the following structure:
+MetaReason is a Bayesian evaluation framework for LLM systems. The pipeline:
 
-- `src/metareason/` - Main package directory
-  - `config/` - Pydantic models for YAML specification validation
-  - `adapters/` - LLM adapter implementations (Ollama, OpenAI, Google, Anthropic)
-  - `oracles/` - Evaluation oracles (currently: LLM Judge)
-  - `sampling/` - Sampling strategies (currently: Latin Hypercube)
-  - `pipeline/` - Template rendering and execution pipeline
-  - `analysis/` - Bayesian statistical analysis with PyMC
-  - `cli/` - Click-based command-line interface with rich output
-  - `reporting/` - HTML report generation with visualizations
-- `tests/` - Test directory (120+ tests, 82% coverage)
-- `examples/` - Example YAML specifications demonstrating features
-- `test_suite/` - Additional test specifications
-- `reports/` - Output directory for evaluation results (JSON)
-- `scripts/` - Development scripts for formatting and testing
-- `pyproject.toml` - Project configuration with dependencies
+```
+YAML Spec → LHS Sampling → Jinja2 Templating → Async LLM Execution → Oracle Scoring → Bayesian Analysis → HTML Report
+```
 
-## Claude's Role
+### Source Layout (`src/metareason/`)
 
-**Default mode: Pair Programmer.** Claude works collaboratively with the user — discussing changes, explaining reasoning, and only making edits when explicitly asked. Do not write code unprompted. Describe what needs to change, explain why, and wait for the user to say "make that edit" or similar.
+| Module | Purpose | Key Classes |
+|--------|---------|-------------|
+| `config/models.py` | Pydantic models for YAML spec validation | `SpecConfig`, `AxisConfig`, `PipelineConfig`, `OracleConfig`, `BayesianAnalysisConfig`, `CalibrateConfig`, `CalibrateMultiConfig` |
+| `adapters/` | Async LLM provider abstraction with retry | `AdapterBase` (ABC), `get_adapter(name)` factory. Providers: ollama, openai, google, anthropic |
+| `pipeline/runner.py` | Main evaluation orchestrator | `run(spec_path) → List[SampleResult]` — loads spec, samples params, chains LLM stages, runs oracles |
+| `pipeline/loader.py` | YAML loading with recursive `file:` prefix resolution | `load_spec()`, `load_calibrate_spec()`, `load_calibrate_multi_spec()` |
+| `pipeline/renderer.py` | Jinja2 prompt templating | `TemplateRenderer.render_request(template, variables)` |
+| `sampling/lhs_sampler.py` | Latin Hypercube Sampling with scipy QMC | `LhsSampler.generate_samples()` — supports uniform, normal, truncnorm, beta distributions + categorical axes |
+| `oracles/` | Output evaluation | `OracleBase` (ABC). Implementations: `LLMJudge` (LLM-as-judge, returns JSON score+explanation), `RegexOracle` (pattern matching, linear score interpolation 1.0-5.0) |
+| `analysis/analyzer.py` | Bayesian inference with PyMC/ArviZ | `BayesianAnalyzer` — `estimate_population_quality()`, `estimate_judge_calibration()`, `estimate_parameter_effects()` |
+| `analysis/agreement.py` | Inter-rater reliability | `compute_krippendorff_alpha()`, `compute_pairwise_correlations()` |
+| `calibration/` | Iterative judge rubric optimization | `AutoCalibrationLoop` orchestrates evaluate→check convergence→optimize rubric→iterate. Uses `ConvergenceChecker` and `RubricOptimizer` (LLM-driven rubric revision) |
+| `reporting/` | Self-contained HTML reports with Chart.js + matplotlib | `ReportGenerator`, `CalibrationReportGenerator`, `MultiJudgeReportGenerator` |
+| `storage/store.py` | SQLite persistence (WAL mode) | `RunStore` context manager — tables: runs, pipeline_stages, samples, evaluations, analysis_results |
+| `cli/main.py` | Click CLI | Commands: `run`, `validate`, `analyze`, `report`, `calibrate`, `calibrate-multi` |
 
-**Auto-complete mode:** When the user explicitly says to go into auto-complete mode, Claude can write code autonomously — making edits, running tests, and iterating without pausing for approval on each change. Return to pair programmer mode when told to.
+### Key Design Patterns
 
-## Important Notes
+- **Async throughout**: Pipeline runner uses `asyncio.gather` for concurrent sample processing. Adapters are async.
+- **File reference resolution**: Any string value prefixed with `file:` in YAML specs is recursively resolved to file contents (relative to spec directory). Works across all spec types.
+- **Multi-stage pipelines**: Each pipeline stage chains to the next — previous stage's response becomes the next stage's input via Jinja2 `{{ response }}` variable.
+- **Oracle scoring**: All scores are on a 1.0-5.0 scale. LLMJudge expects JSON `{"score": X, "explanation": "..."}` from the judge LLM.
+- **Bayesian models**: PyMC hierarchical models with configurable priors via `BayesianAnalysisConfig`. HDI (High-Density Interval) is the primary uncertainty measure, default 94%.
 
-- **Python 3.13+ required**: The project targets Python 3.13 or higher
-- **Test coverage requirement**: 80% coverage target (currently at 82%)
-- **Always use venv**: All commands should be run within the virtual environment
-- **Statistical rigor**: The core differentiator is Bayesian analysis providing credible intervals, not just point estimates
+## Code Style
 
-## Development Philosophy
-
-Focus on:
-
-1. Simple, working implementations over complex abstractions
-2. Incremental development with working code at each step
-3. Real integration tests over mocked unit tests
-4. Clear separation of concerns without over-engineering
-5. Statistical rigor and proper uncertainty quantification
+- **Formatter**: black (line-length 88) + isort (black profile)
+- **Linter**: flake8 (max-line-length 120, google docstring convention, many D-codes ignored — see `.flake8`)
+- **Python**: 3.13+ required
+- **Commits**: Conventional format via commitizen hook — `feat:`, `fix:`, `test:`, `docs:`, `refactor:`, `chore:`
+- **Branches**: `<type>/<short-description>` (e.g., `feat/report-cli`)
+- **Pre-commit hooks**: black, isort, flake8, bandit, commitizen, plus standard checks (trailing whitespace, YAML, large files, debug statements, private keys)
+- **Test markers**: `@pytest.mark.slow`, `@pytest.mark.integration`, `@pytest.mark.unit`
+- **Async tests**: `asyncio_mode = "auto"` — async test functions work without explicit decorator
