@@ -841,18 +841,18 @@ def _run_auto_calibration(calibrate_config, spec_path, output, report):
     help="Generate HTML report",
 )
 @click.option(
-    "--auto-calibrate",
+    "--auto",
     is_flag=True,
     help="Run auto-calibration loop to iteratively optimize the judge rubric",
 )
-def calibrate(spec, output, report, auto_calibrate):
+def calibrate(spec, output, report, auto):
     """Calibrate an LLM judge by measuring scoring consistency and reliability."""
     try:
         spec_path = Path(spec)
         calibrate_config = load_calibrate_spec(spec_path)
 
-        # Auto-calibration: detect from --auto-calibrate flag or spec config
-        auto_enabled = auto_calibrate or (
+        # Auto-calibration: detect from --auto flag or spec config
+        auto_enabled = auto or (
             calibrate_config.auto_calibration is not None
             and calibrate_config.auto_calibration.enabled
         )

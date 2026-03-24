@@ -63,22 +63,80 @@ Validate a spec file:
 metareason validate examples/quantum_entanglement_eval.yml
 ```
 
-Run an evaluation with Bayesian analysis:
+Run an evaluation with Bayesian analysis and generate an HTML report:
 ```bash
-metareason run examples/quantum_entanglement_eval.yml --analyze
+metareason run examples/quantum_entanglement_eval.yml --analyze --report
 ```
 
-Analyze previously saved results:
+Save results to a custom path:
+```bash
+metareason run examples/quantum_entanglement_eval.yml --analyze -o results/my_eval.json
+```
+
+Persist run data to a SQLite database for later querying:
+```bash
+metareason run examples/quantum_entanglement_eval.yml --analyze --db runs.db
+```
+
+Analyze previously saved results (all oracles, or a specific one):
 ```bash
 metareason analyze reports/my_results.json --spec examples/quantum_entanglement_eval.yml
+metareason analyze reports/my_results.json --spec examples/quantum_entanglement_eval.yml --oracle coherence_judge
 ```
 
-Generate an HTML report:
+Analyze with inter-judge agreement metrics (requires multiple oracles):
+```bash
+metareason analyze reports/my_results.json --spec examples/quantum_entanglement_eval.yml --agreement
+```
+
+Generate an HTML report from existing results:
 ```bash
 metareason report reports/my_results.json --spec examples/quantum_entanglement_eval.yml
+metareason report reports/my_results.json --spec examples/quantum_entanglement_eval.yml -o my_report.html
 ```
 
 Results are saved as JSON in `reports/` with timestamps. HTML reports are self-contained with embedded visualizations.
+
+### Judge Calibration
+
+Measure a single judge's scoring consistency and bias. Runs repeated evaluations of the same prompt/response pair:
+```bash
+metareason calibrate examples/judge_calibration.yml
+metareason calibrate examples/judge_calibration.yml -o reports/calibration.json --report
+```
+
+Auto-calibrate a judge by iteratively optimizing the rubric until bias converges:
+```bash
+metareason calibrate examples/auto_calibration.yml --auto
+```
+
+Compare multiple judges side-by-side with hierarchical Bayesian analysis:
+```bash
+metareason calibrate-multi examples/multi_judge_calibration.yml --report
+```
+
+### Database
+
+When using `--db` with `metareason run`, results are stored in SQLite for querying and export.
+
+List recent runs:
+```bash
+metareason db runs.db runs
+metareason db runs.db runs --limit 5
+```
+
+View scores for a specific run:
+```bash
+metareason db runs.db scores 1
+metareason db runs.db scores 1 --oracle coherence_judge
+```
+
+Export high-scoring prompt/response pairs for fine-tuning:
+```bash
+metareason db runs.db export --min-score 4.0 -f training_data.jsonl
+metareason db runs.db export --run-id 1 --format openai -f finetune.jsonl
+metareason db runs.db export --format messages -f pairs.jsonl
+```
 
 ### Example Output
 
